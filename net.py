@@ -188,6 +188,10 @@ class CBR(chainer.Chain):
         elif self.sample == 'unpool':
             h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
             h = self.c(h)
+        elif self.sample == 'resize':
+            H,W = x.data.shape[2:]
+            h = F.resize_images(x, (2*H,2*W))
+            h = self.c(h)
         elif self.sample == 'unpool_res':
             h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
             h0 = self.c(h)

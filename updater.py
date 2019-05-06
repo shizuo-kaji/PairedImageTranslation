@@ -100,27 +100,23 @@ class pixupdater(chainer.training.StandardUpdater):
         # reconstruction error
         loss_rec_l1 = F.mean_absolute_error(x_out, t_out)
         loss_rec_l2 = F.mean_squared_error(x_out, t_out)
-        loss_rec = self.args.lambda_rec_l1*loss_rec_l1 + self.args.lambda_rec_l2*loss_rec_l2
+        chainer.report({'loss_L1': loss_rec_l1}, gen)
+        chainer.report({'loss_L2': loss_rec_l2}, gen)
+        loss_gen = self.args.lambda_rec_l1*loss_rec_l1 + self.args.lambda_rec_l2*loss_rec_l2
+
         if self.args.lambda_tv > 0:
             loss_tv = self.total_variation(x_out, self.args.tv_tau)
-        else:
-            loss_tv = 0
-
+            loss_gen += self.args.lambda_tv * loss_tv
+            chainer.report({'loss_tv': loss_tv}, gen)
+ 
         # discriminator error
         if self.args.lambda_dis>0:
             y_fake = dis(F.concat([x_in, x_out]))
             #batchsize,_,w,h = y_fake.data.shape
             #loss_dis = F.sum(F.softplus(-y_fake)) / batchsize / w / h
             loss_dis = self.loss_func_comp(y_fake,1.0)
-        else:
-            loss_dis = 0
-
-        chainer.report({'loss_L1': loss_rec_l1}, gen)
-        chainer.report({'loss_L2': loss_rec_l2}, gen)
-        chainer.report({'loss_dis': loss_dis}, gen)
-        chainer.report({'loss_tv': loss_tv}, gen)
-
-        loss_gen = loss_rec + self.args.lambda_dis * loss_dis + self.args.lambda_tv * loss_tv
+            chainer.report({'loss_dis': loss_dis}, gen)
+            loss_gen += self.args.lambda_dis * loss_dis
 
         # update generator model
         gen.cleargrads()
@@ -134,19 +130,15 @@ class pixupdater(chainer.training.StandardUpdater):
             y_fake = dis(F.concat([x_in_copy,x_out_copy]))
             loss_fake = self.loss_func_comp(y_fake,0.0)
             ## mis-matched input-output pair should be discriminated as fake
-            if self._buffer_in.num_imgs > 50:
-                f_out = Variable(self.gen.xp.concatenate(random.sample(self._buffer_in.images, len(x_in))))
-#                print(f_out.data.shape)
-                loss_mispair = self.loss_func_comp(dis(F.concat([x_in,f_out])),0.0)
+            if self._buffer_in.num_imgs > 40:
+                f_in = Variable(self.gen.xp.concatenate(random.sample(self._buffer_in.images, len(x_in))))
+                loss_mispair = self.loss_func_comp(dis(F.concat([f_in,t_out])),0.0)
             else:
                 loss_mispair = 0
             loss = loss_fake + loss_real + loss_mispair
             dis.cleargrads()
             loss.backward()
             dis_optimizer.update()
-        else:
-            loss_fake = 0
-            loss_real = 0
-        chainer.report({'loss_fake': loss_fake}, dis)
-        chainer.report({'loss_real': loss_real}, dis)
-        chainer.report({'loss_mispair': loss_mispair}, dis)
+            chainer.report({'loss_fake': loss_fake}, dis)
+            chainer.report({'loss_real': loss_real}, dis)
+            chainer.report({'loss_mispair': loss_mispair}, dis)

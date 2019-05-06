@@ -14,7 +14,7 @@ def arguments():
                         help='column index of FromImage')
     parser.add_argument('--to_col', '-c2', type=int, nargs="*", default=[1],
                         help='column index of ToImage')
-    parser.add_argument('--batchsize', '-b', type=int, default=3,
+    parser.add_argument('--batchsize', '-b', type=int, default=1,
                         help='Number of images in each mini-batch')
     parser.add_argument('--epoch', '-e', type=int, default=400,
                         help='Number of sweeps over the dataset to train')
@@ -59,7 +59,7 @@ def arguments():
                         help='weight decay for regularization')
     parser.add_argument('--weight_decay_norm', '-wn', choices=['l1','l2'], default='l2',
                         help='norm of weight decay for regularization')
-    parser.add_argument('--vis_freq', '-vf', type=int, default=2000,
+    parser.add_argument('--vis_freq', '-vf', type=int, default=4000,
                         help='visualisation frequency in iteration')
 
     # data augmentation
@@ -105,7 +105,7 @@ def arguments():
                         help='first and last conv layers for generator')
     parser.add_argument('--gen_down', '-gd', default='down', choices=['down','maxpool','maxpool_res','avgpool','avgpool_res','none'],
                         help='down layers in generator')
-    parser.add_argument('--gen_up', '-gu', default='unpool', choices=['unpool','unpool_res','deconv','pixsh','none'],
+    parser.add_argument('--gen_up', '-gu', default='resize', choices=['unpool','unpool_res','deconv','pixsh','resize','none'],
                         help='up layers in generator')
     parser.add_argument('--gen_dropout', '-gdo', type=float, default=None, 
                         help='dropout ratio for generator')
