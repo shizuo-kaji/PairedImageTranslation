@@ -35,7 +35,7 @@ MIT Licence
 ## Usage
 ```python train_cgan.py -t ct_reconst_train.txt --val ct_reconst_val.txt -R ~/radon -o ~/result -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 0.01 -cw 112 -ch 112```
 
-Learns translation of images in ct_reconst_train.txt placed under "~/radon/" and outputs the result under "~/result/". The images are cropped to 112x112.
+Learns translation of images in ct_reconst_train.txt placed under "radon/" and outputs the result under "result/". The images are cropped to 112x112.
 Train the model with GPU (id 0) and 200 epochs.
 Use the network with 1 FC layers at the beginning (as in AUTOMAP) without UNet-like skip connections.
 The loss consists of L2 reconstruction error, discriminator, and total variation with weights 1.0 0.1 0.01 respectively.
