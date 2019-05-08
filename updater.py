@@ -56,13 +56,11 @@ class pixupdater(chainer.training.StandardUpdater):
         self.args = params['args']
         self.init_alpha = self.get_optimizer('gen').alpha
         self.xp = self.gen.xp
-        self._buffer_in = ImagePool(50 * self.args.batchsize)
-        self._buffer_out = ImagePool(50 * self.args.batchsize)
+        self._buffer = ImagePool(50 * self.args.batchsize)
 
     def loss_func_comp(self, y, val, noise=0):
         if noise>0:
             val += random.normalvariate(0,noise)   ## jitter for the target value
-    #        val += random.uniform(-noise, noise)   ## jitter for the target value
         target = self.xp.full(y.data.shape, val, dtype=y.dtype)
         return F.mean_squared_error(y, target)
 
@@ -92,10 +90,8 @@ class pixupdater(chainer.training.StandardUpdater):
         ## image conversion
         batch = self.get_iterator('main').next()
         x_in, t_out = self.converter(batch, self.device)
-        x_in = Variable(x_in)
-        x_out = gen(add_noise(x_in, sigma=self.args.noise))
-        x_in_copy = Variable(self._buffer_in.query(x_in.data))
-        x_out_copy = Variable(self._buffer_out.query(x_out.data))
+        x_out = gen(add_noise(Variable(x_in), sigma=self.args.noise))
+        x_in_out_copy = Variable(self._buffer.query(F.concat([x_in,x_out]).data))
 
         # reconstruction error
         loss_rec_l1 = F.mean_absolute_error(x_out, t_out)
@@ -127,11 +123,12 @@ class pixupdater(chainer.training.StandardUpdater):
         if self.args.lambda_dis>0:
             y_real = dis(F.concat([x_in, t_out]))
             loss_real = self.loss_func_comp(y_real,1.0)
-            y_fake = dis(F.concat([x_in_copy,x_out_copy]))
+            y_fake = dis(x_in_out_copy)
             loss_fake = self.loss_func_comp(y_fake,0.0)
             ## mis-matched input-output pair should be discriminated as fake
-            if self._buffer_in.num_imgs > 40:
-                f_in = Variable(self.gen.xp.concatenate(random.sample(self._buffer_in.images, len(x_in))))
+            if self._buffer.num_imgs > 40:
+                f_in = self.gen.xp.concatenate(random.sample(self._buffer.images, len(x_in)))
+                f_in = Variable(f_in[:,:x_in.shape[1],:,:])
                 loss_mispair = self.loss_func_comp(dis(F.concat([f_in,t_out])),0.0)
             else:
                 loss_mispair = 0

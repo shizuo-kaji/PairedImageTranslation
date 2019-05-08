@@ -43,7 +43,11 @@ class Dataset(dataset_mixin.DatasetMixin):
                 self.dataset.append([
                     [os.path.join(DataDir,files[i]) for i in from_col],
                     [os.path.join(DataDir,files[i]) for i in to_col]
-                ]) 
+                ])
+                for i in range(len(files)):
+                    if not os.path.isfile(os.path.join(DataDir,files[i])):
+                        print("{} not found!".format(os.path.join(DataDir,files[i])))
+                        exit()
         self.crop = crop
         self.grey = grey
         self.random = random # random crop/flip for data augmentation
@@ -61,9 +65,9 @@ class Dataset(dataset_mixin.DatasetMixin):
             if random.choice([True, False]):
                 imgs_in = imgs_in[:, :, ::-1]
                 imgs_out = imgs_out[:, :, ::-1]
-            y_offset = random.randint(0, imgs_in.shape[1] - H)
+            y_offset = random.randint(0, max(imgs_in.shape[1] - H,0))
             y_slice = slice(y_offset, y_offset + H)
-            x_offset = random.randint(0, imgs_in.shape[2] - W)
+            x_offset = random.randint(0, max(imgs_in.shape[2] - W,0))
             x_slice = slice(x_offset, x_offset + W)                
         else: # centre crop
             y_offset = int(round((H - imgs_in.shape[1]) / 2.))

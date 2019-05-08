@@ -172,34 +172,19 @@ class CBR(chainer.Chain):
                 self.c = EqualizedDeconv2d(ch0, ch1, ksize, 2, pad, equalised=equalised, nobias=nobias, separable=separable)
             elif sample == 'pixsh':
                 self.c = PixelShuffler(ch0, ch1, ksize, pad, nobias=nobias)
-            elif sample in ['unpool_res','maxpool_res','avgpool_res']:
-                self.c = EqualizedConv2d(ch0, ch1, ksize, 1, pad, equalised=equalised, nobias=nobias, separable=separable)
-                if self.use_norm:
-                    self.norm0 = get_norm_layer(norm)(ch1)
-                self.cr = EqualizedConv2d(ch1, ch1, ksize, 1, pad, equalised=equalised, nobias=nobias, separable=separable)
             else:
                 self.c = EqualizedConv2d(ch0, ch1, ksize, 1, pad, equalised=equalised, nobias=nobias, separable=separable)
             if self.use_norm:
                 self.norm = get_norm_layer(norm)(ch1)
+            if '_res' in sample:
+                if self.use_norm:
+                    self.norm0 = get_norm_layer(norm)(ch1)
+                self.cr = EqualizedConv2d(ch1, ch1, ksize, 1, pad, equalised=equalised, nobias=nobias, separable=separable)
+                self.cskip = EqualizedConv2d(ch0, ch1, 1, 1, 0, equalised=equalised, nobias=nobias)
 
     def __call__(self, x):
         if self.sample in ['down','none','none-7','deconv','pixsh']:
             h = self.c(x)
-        elif self.sample == 'unpool':
-            h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
-            h = self.c(h)
-        elif self.sample == 'resize':
-            H,W = x.data.shape[2:]
-            h = F.resize_images(x, (2*H,2*W))
-            h = self.c(h)
-        elif self.sample == 'unpool_res':
-            h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
-            h0 = self.c(h)
-            if self.use_norm:
-                h = self.norm0(h0)
-            if self.activation is not None:
-                h = self.activation(h)
-            h = h0 + self.cr(h)
         elif self.sample == 'maxpool':
             h = self.c(x)
             h = F.max_pooling_2d(h, 2, 2, 0)
@@ -209,7 +194,7 @@ class CBR(chainer.Chain):
                 h = self.norm0(h)
             if self.activation is not None:
                 h = self.activation(h)
-            h = x+self.cr(h)
+            h = self.cskip(x)+self.cr(h)
             h = F.max_pooling_2d(h, 2, 2, 0)
         elif self.sample == 'avgpool':
             h = self.c(x)
@@ -220,8 +205,32 @@ class CBR(chainer.Chain):
                 h = self.norm0(h)
             if self.activation is not None:
                 h = self.activation(h)
-            h = x+self.cr(h)
+            h = self.cskip(x)+self.cr(h)
             h = F.average_pooling_2d(h, 2, 2, 0)
+        elif self.sample == 'resize':
+            H,W = x.data.shape[2:]
+            h = F.resize_images(x, (2*H,2*W))
+            h = self.c(h)
+        elif self.sample == 'resize_res':
+            H,W = x.data.shape[2:]
+            h = F.resize_images(x, (2*H,2*W))
+            h0 = self.c(h)
+            if self.use_norm:
+                h0 = self.norm0(h0)
+            if self.activation is not None:
+                h0 = self.activation(h0)
+            h = self.cskip(h) + self.cr(h0)
+        elif self.sample == 'unpool':
+            h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
+            h = self.c(h)
+        elif self.sample == 'unpool_res':
+            h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
+            h0 = self.c(h)
+            if self.use_norm:
+                h0 = self.norm0(h0)
+            if self.activation is not None:
+                h0 = self.activation(h0)
+            h = self.cskip(h) + self.cr(h0)
         else:
             print('unknown sample method %s' % self.sample)
             exit()

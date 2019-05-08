@@ -105,7 +105,7 @@ def arguments():
                         help='first and last conv layers for generator')
     parser.add_argument('--gen_down', '-gd', default='down', choices=['down','maxpool','maxpool_res','avgpool','avgpool_res','none'],
                         help='down layers in generator')
-    parser.add_argument('--gen_up', '-gu', default='resize', choices=['unpool','unpool_res','deconv','pixsh','resize','none'],
+    parser.add_argument('--gen_up', '-gu', default='resize', choices=['unpool','unpool_res','deconv','pixsh','resize','resize_res','none'],
                         help='up layers in generator')
     parser.add_argument('--gen_dropout', '-gdo', type=float, default=None, 
                         help='dropout ratio for generator')
