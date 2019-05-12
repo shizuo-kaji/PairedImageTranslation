@@ -10,23 +10,24 @@ def arguments():
     parser = argparse.ArgumentParser(description='chainer implementation of pix2pix')
     parser.add_argument('--train', '-t', help='text file containing image pair filenames for training')
     parser.add_argument('--val', help='text file containing image pair filenames for validation')
+    parser.add_argument('--argfile', '-a', help="specify args file to read")
     parser.add_argument('--from_col', '-c1', type=int, nargs="*", default=[0],
                         help='column index of FromImage')
     parser.add_argument('--to_col', '-c2', type=int, nargs="*", default=[1],
                         help='column index of ToImage')
-    parser.add_argument('--batchsize', '-b', type=int, default=1,
+    parser.add_argument('--batch_size', '-b', type=int, default=1,
                         help='Number of images in each mini-batch')
     parser.add_argument('--epoch', '-e', type=int, default=400,
                         help='Number of sweeps over the dataset to train')
     parser.add_argument('--gpu', '-g', type=int, default=0,
                         help='GPU ID (negative value indicates CPU)')
-    parser.add_argument('--outdir', '-o', default='result',
+    parser.add_argument('--out', '-o', default='result',
                         help='Directory to output the result')
     parser.add_argument('--root', '-R', default='.',
                         help='directory containing image files')
 
-    parser.add_argument('--snapshot_interval','-s', type=int, default=-1,
-                        help='Interval of snapshot')
+    parser.add_argument('--snapinterval', '-si', type=int, default=-1, 
+                        help='take snapshot every this epoch')
     parser.add_argument('--display_interval', type=int, default=500,
                         help='Interval of displaying log to console')
     parser.add_argument('--nvis', type=int, default=3,
@@ -110,15 +111,15 @@ def arguments():
     parser.add_argument('--gen_dropout', '-gdo', type=float, default=None, 
                         help='dropout ratio for generator')
     parser.add_argument('--gen_norm', '-gn', default='instance',
-                        choices=['instance', 'instance_aff','batch','batch_aff', 'rbatch', 'fnorm', 'none'])
+                        choices=['instance', 'batch','batch_aff', 'rbatch', 'fnorm', 'none'])
     parser.add_argument('--unet', '-u', default='none', choices=['none','no_last','with_last'],
                         help='use u-net for generator')
 
     args = parser.parse_args()
-    args.outdir = os.path.join(args.outdir, dt.now().strftime('%m%d_%H%M')+"_cgan")
-    save_args(args, args.outdir)
+    args.out = os.path.join(args.out, dt.now().strftime('%m%d_%H%M')+"_cgan")
+    save_args(args, args.out)
     print(args)
-    print(args.outdir)
+    print(args.out)
 
     args.dtype = dtypes[args.dtype]
     args.dis_activation = activation[args.dis_activation]

@@ -5,15 +5,7 @@ import chainer.functions as F
 import chainer.links as L
 import numpy as np
 
-from instance_normalization import InstanceNormalization
-
-# add gaussian noise
-def add_noise(h, sigma): 
-    if chainer.config.train and sigma>0:
-        xp = chainer.cuda.get_array_module(h.data)
-        return h + sigma * xp.random.randn(*h.data.shape, dtype=h.dtype)
-    else:
-        return h
+#from instance_normalization import InstanceNormalization
 
 # normalisation selection
 def get_norm_layer(norm='instance'):
@@ -26,9 +18,8 @@ def get_norm_layer(norm='instance'):
     elif norm == 'rbatch':
         norm_layer = functools.partial(L.BatchRenormalization, use_gamma=False, use_beta=False)
     elif norm == 'instance':
-        norm_layer = functools.partial(InstanceNormalization, use_gamma=False, use_beta=False)
-    elif norm == 'instance_aff':
-        norm_layer = functools.partial(InstanceNormalization, use_gamma=True, use_beta=True)
+        norm_layer = functools.partial(L.GroupNormalization, 1)
+#        norm_layer = functools.partial(InstanceNormalization, use_gamma=False, use_beta=False)
     elif norm == 'fnorm':
         norm_layer = lambda x: feature_vector_normalization
     else:
@@ -183,61 +174,44 @@ class CBR(chainer.Chain):
                 self.cskip = EqualizedConv2d(ch0, ch1, 1, 1, 0, equalised=equalised, nobias=nobias)
 
     def __call__(self, x):
-        if self.sample in ['down','none','none-7','deconv','pixsh']:
-            h = self.c(x)
-        elif self.sample == 'maxpool':
-            h = self.c(x)
-            h = F.max_pooling_2d(h, 2, 2, 0)
-        elif self.sample == 'maxpool_res':
-            h = self.c(x)
-            if self.use_norm:
-                h = self.norm0(h)
-            if self.activation is not None:
-                h = self.activation(h)
-            h = self.cskip(x)+self.cr(h)
-            h = F.max_pooling_2d(h, 2, 2, 0)
-        elif self.sample == 'avgpool':
-            h = self.c(x)
-            h = F.average_pooling_2d(h, 2, 2, 0)
-        elif self.sample == 'avgpool_res':
-            h = self.c(x)
-            if self.use_norm:
-                h = self.norm0(h)
-            if self.activation is not None:
-                h = self.activation(h)
-            h = self.cskip(x)+self.cr(h)
-            h = F.average_pooling_2d(h, 2, 2, 0)
+        if self.sample in ['maxpool_res','avgpool_res']:
+            h = self.activation(self.norm0(self.c(x)))
+            h = self.norm(self.cr(h))
+            if self.sample == 'maxpool_res':
+                h = F.max_pooling_2d(h, 2, 2, 0)
+                h = h + F.max_pooling_2d(self.cskip(x), 2, 2, 0)
+            elif self.sample == 'avgpool_res':
+                h = F.average_pooling_2d(h, 2, 2, 0)
+                h = h + F.average_pooling_2d(self.cskip(x), 2, 2, 0)                
         elif self.sample == 'resize':
             H,W = x.data.shape[2:]
             h = F.resize_images(x, (2*H,2*W))
-            h = self.c(h)
+            h = self.norm(self.c(h))
         elif self.sample == 'resize_res':
             H,W = x.data.shape[2:]
             h = F.resize_images(x, (2*H,2*W))
-            h0 = self.c(h)
-            if self.use_norm:
-                h0 = self.norm0(h0)
-            if self.activation is not None:
-                h0 = self.activation(h0)
-            h = self.cskip(h) + self.cr(h0)
-        elif self.sample == 'unpool':
-            h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
-            h = self.c(h)
+            h0 = self.activation(self.norm0(self.c(h)))
+            h = self.cskip(h) + self.norm(self.cr(h0))
         elif self.sample == 'unpool_res':
             h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
-            h0 = self.c(h)
-            if self.use_norm:
-                h0 = self.norm0(h0)
-            if self.activation is not None:
-                h0 = self.activation(h0)
-            h = self.cskip(h) + self.cr(h0)
+            h0 = self.activation(self.norm0(self.c(h)))
+            h = self.cskip(h) + self.norm(self.cr(h0))
         else:
-            print('unknown sample method %s' % self.sample)
-            exit()
-        if self.use_norm:
-            h = self.norm(h)
-        if self.dropout:
-            h = F.dropout(h, ratio=self.dropout)
+            if self.sample == 'maxpool':
+                h = self.c(x)
+                h = F.max_pooling_2d(h, 2, 2, 0)
+            elif self.sample == 'avgpool':
+                h = self.c(x)
+                h = F.average_pooling_2d(h, 2, 2, 0)
+            elif self.sample == 'unpool':
+                h = F.unpooling_2d(x, 2, 2, 0, cover_all=False)
+                h = self.c(h)
+            else:
+                h = self.c(x)
+            if self.use_norm:
+                h = self.norm(h)
+            if self.dropout:
+                h = F.dropout(h, ratio=self.dropout)
         if self.activation is not None:
             h = self.activation(h)
         return h
@@ -376,7 +350,10 @@ class Generator(chainer.Chain):
         e = h[-1]
         for i in range(self.n_resblock):
             e = getattr(self, 'r' + str(i))(e)
-        e = add_noise(e,self.noise_z)
+            if chainer.config.train and self.noise_z>0 and i == self.n_resblock//2:
+                xp = chainer.cuda.get_array_module(e.data)
+                e.data += self.noise_z * xp.random.randn(*e.data.shape, dtype=e.dtype)
+        ## add noise
         for i in range(1,len(self.chs)):
             if self.unet in ['no_last','with_last']:
                 e = getattr(self, 'ua' + str(i))(F.concat([e,h[-1]]))

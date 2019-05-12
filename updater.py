@@ -56,7 +56,7 @@ class pixupdater(chainer.training.StandardUpdater):
         self.args = params['args']
         self.init_alpha = self.get_optimizer('gen').alpha
         self.xp = self.gen.xp
-        self._buffer = ImagePool(50 * self.args.batchsize)
+        self._buffer = ImagePool(50 * self.args.batch_size)
 
     def loss_func_comp(self, y, val, noise=0):
         if noise>0:

@@ -43,7 +43,7 @@ def main():
     test_d = Dataset(args.val, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random, grey=args.grey)
 
     # setup training/validation data iterators
-    train_iter = chainer.iterators.SerialIterator(train_d, args.batchsize)
+    train_iter = chainer.iterators.SerialIterator(train_d, args.batch_size)
     test_iter = chainer.iterators.SerialIterator(test_d, args.nvis, shuffle=False)
     test_iter_gt = chainer.iterators.SerialIterator(train_d, args.nvis, shuffle=False)   ## same as training data; used for validation
 
@@ -111,24 +111,24 @@ def main():
             'dis': opt_dis},
         params={'args': args},
         device=args.gpu)
-    trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.outdir)
+    trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
 
     ## save learnt results at an interval
-    if args.snapshot_interval<0:
-        args.snapshot_interval = args.epoch
-    snapshot_interval = (args.snapshot_interval, 'epoch')
+    if args.snapinterval<0:
+        args.snapinterval = args.epoch
+    snapshot_interval = (args.snapinterval, 'epoch')
     display_interval = (args.display_interval, 'iteration')
     preview_interval = (args.vis_freq, 'iteration')
 #    preview_interval = (1, 'epoch')
         
     trainer.extend(extensions.snapshot_object(
-        gen, 'gen_iter_{.updater.epoch}.npz'), trigger=snapshot_interval)
+        gen, 'gen_{.updater.epoch}.npz'), trigger=snapshot_interval)
     trainer.extend(extensions.snapshot_object(
         opt_gen, 'opt_gen_{.updater.epoch}.npz'), trigger=snapshot_interval)
     trainer.extend(extensions.dump_graph('gen/loss_L1', out_name='gen.dot'))
     if args.lambda_dis>0:
         trainer.extend(extensions.snapshot_object(
-            dis, 'dis_iter_{.updater.epoch}.npz'), trigger=snapshot_interval)
+            dis, 'dis_{.updater.epoch}.npz'), trigger=snapshot_interval)
         trainer.extend(extensions.dump_graph('dis/loss_real', out_name='dis.dot'))
         trainer.extend(extensions.snapshot_object(
             opt_dis, 'opt_gen_{.updater.epoch}.npz'), trigger=snapshot_interval)
@@ -144,7 +144,7 @@ def main():
     trainer.extend(extensions.ProgressBar(update_interval=10))
 
     # evaluation
-    vis_folder = os.path.join(args.outdir, "vis")
+    vis_folder = os.path.join(args.out, "vis")
     os.makedirs(vis_folder, exist_ok=True)
     trainer.extend(VisEvaluator({"test":test_iter, "train":test_iter_gt}, {"gen":gen},
             params={'vis_out': vis_folder}, device=args.gpu),trigger=preview_interval )

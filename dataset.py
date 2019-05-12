@@ -51,10 +51,16 @@ class Dataset(dataset_mixin.DatasetMixin):
         self.crop = crop
         self.grey = grey
         self.random = random # random crop/flip for data augmentation
-        print("loading {} images".format(len(self.dataset)))
+        print("loaded {} images".format(len(self.dataset)))
     
     def __len__(self):
         return len(self.dataset)
+
+    def get_img_path(self, i):
+        return '{:s}'.format(self.dataset[i][0][0])
+
+    def var2img(self,var):
+        return(0.5*(1.0+var)*255)
 
     def get_example(self, i):
         il,ol = self.dataset[i]

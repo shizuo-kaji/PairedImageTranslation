@@ -41,7 +41,7 @@ def main():
     parser = argparse.ArgumentParser(description='create sinograms for artificial images')
     parser.add_argument('--size', '-s', type=int, default=128,
                         help='size of the image')
-    parser.add_argument('--num', '-n', type=int, default=1000,
+    parser.add_argument('--num', '-n', type=int, default=2500,
                         help='Number of images to be created')
     parser.add_argument('--noise', '-z', type=int, default=10,
                         help='Strength of noise')
@@ -72,12 +72,12 @@ def main():
         print("radon #{}, min {}, max {}".format(i,np.min(img),np.max(img),img.shape))
         cv2.imwrite(os.path.join(args.outdir,"r{0:04d}.png".format(i)), np.clip(img,0,255).astype(np.uint8))
         # add noise
-        img = np.clip(img+np.random.randint(-args.noise,args.noise,img.shape),0,255)
-        print("radon w/ noise #{}, min {}, max {}".format(i,np.min(img),np.max(img),img.shape))
-        cv2.imwrite(os.path.join(args.outdir,"nn{0:04d}.png".format(i)), img)
+#        img = np.clip(img+np.random.randint(-args.noise,args.noise,img.shape),0,255)
+#        print("radon w/ noise #{}, min {}, max {}".format(i,np.min(img),np.max(img),img.shape))
+#        cv2.imwrite(os.path.join(args.outdir,"nn{0:04d}.png".format(i)), img)
         # reconstructed by inverse radon transform
-        reconstruction = iradon(img/256 * args.size*args.size, theta=theta, circle=True)
-        cv2.imwrite(os.path.join(args.outdir,"i{0:04d}.png".format(i)), reconstruction)
+#        reconstruction = iradon(img/256 * 2*args.size*args.size, theta=theta, circle=True)
+#        cv2.imwrite(os.path.join(args.outdir,"i{0:04d}.png".format(i)), reconstruction)
 
 if __name__ == '__main__':
     main()
