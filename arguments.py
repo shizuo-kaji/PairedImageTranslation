@@ -10,6 +10,7 @@ def arguments():
     parser = argparse.ArgumentParser(description='chainer implementation of pix2pix')
     parser.add_argument('--train', '-t', help='text file containing image pair filenames for training')
     parser.add_argument('--val', help='text file containing image pair filenames for validation')
+    parser.add_argument('--imgtype', '-it', default="jpg", help="image file type (file extension)")
     parser.add_argument('--argfile', '-a', help="specify args file to read")
     parser.add_argument('--from_col', '-c1', type=int, nargs="*", default=[0],
                         help='column index of FromImage')
@@ -25,6 +26,7 @@ def arguments():
                         help='Directory to output the result')
     parser.add_argument('--root', '-R', default='.',
                         help='directory containing image files')
+    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-4)
 
     parser.add_argument('--snapinterval', '-si', type=int, default=-1, 
                         help='take snapshot every this epoch')
@@ -42,12 +44,12 @@ def arguments():
     parser.add_argument('--lambda_rec_l2', '-l2', type=float, default=0.0)
     parser.add_argument('--lambda_dis', '-ldis', type=float, default=0.1)
     parser.add_argument('--lambda_tv', '-ltv', type=float, default=0.0)
-    parser.add_argument('--tv_tau', '-tt', type=float, default=1e-4,
+    parser.add_argument('--lambda_mispair', '-lm', type=float, default=1.0)
+    parser.add_argument('--tv_tau', '-tt', type=float, default=1e-3,
                         help='smoothing parameter for total variation')
-    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-4)
 
     parser.add_argument('--load_optimizer', '-op', action='store_true', help='load optimizer parameters')
-    parser.add_argument('--model_gen', '-mg', default='')
+    parser.add_argument('--model_gen', '-m', default='')
     parser.add_argument('--model_dis', '-md', default='')
 
     parser.add_argument('--dtype', '-dt', choices=dtypes.keys(), default='fp32',
@@ -65,8 +67,8 @@ def arguments():
 
     # data augmentation
     parser.add_argument('--random', '-rt', default=True, help='random flip/crop')
-    parser.add_argument('--noise', '-n', type=float, default=0.1, help='strength of noise injection')
-    parser.add_argument('--noise_z', '-nz', type=float, default=0.1,
+    parser.add_argument('--noise', '-n', type=float, default=0, help='strength of noise injection')
+    parser.add_argument('--noise_z', '-nz', type=float, default=0,
                         help='strength of noise injection for the latent variable')
 
     # discriminator
@@ -86,9 +88,7 @@ def arguments():
     parser.add_argument('--dis_dropout', '-ddo', type=float, default=None, 
                         help='dropout ratio for discriminator')
     parser.add_argument('--dis_norm', '-dn', default='instance',
-                        choices=['instance', 'instance_aff','batch','batch_aff', 'rbatch', 'fnorm', 'none'])
-    parser.add_argument('--wgan', action='store_true',
-                        help='WGAN-GP')
+                        choices=['instance', 'batch','batch_aff', 'rbatch', 'fnorm', 'none'])
 
     # generator: G: A -> B, F: B -> A
     parser.add_argument('--gen_activation', '-ga', default='relu', choices=activation.keys())
@@ -121,6 +121,7 @@ def arguments():
     print(args)
     print(args.out)
 
+    args.wgan=False
     args.dtype = dtypes[args.dtype]
     args.dis_activation = activation[args.dis_activation]
     args.gen_activation = activation[args.gen_activation]

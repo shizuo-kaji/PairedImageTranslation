@@ -1,3 +1,8 @@
+# Instance Normalization in Chainer on top of Batch Normalization
+# By M. Kozuki
+# https://gist.github.com/crcrpar/6f1bc0937a02001f14d963ca2b86427a
+#
+
 from chainer import cuda
 from chainer import functions
 from chainer import links

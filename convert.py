@@ -27,7 +27,6 @@ from chainerui.utils import save_args
 from arguments import arguments 
 from consts import activation,dtypes
 
-from dataset import Dataset
 
 if __name__ == '__main__':
     args = arguments()
@@ -43,10 +42,10 @@ if __name__ == '__main__':
         with open(args.argfile, 'r') as f:
             larg = json.load(f)
             root=os.path.dirname(args.argfile)
-            for x in ['imgtype','crop_width','crop_height','lambda_rec_l1','lambda_rec_l2','grey',
+            for x in ['grey',
               'dis_norm','dis_activation','dis_basech','dis_ksize','dis_sample','dis_down','dis_ndown',
               'gen_norm','gen_activation','gen_out_activation','gen_nblock','gen_chs','gen_sample','gen_down','gen_up','gen_ksize','unet',
-              'conditional_discriminator','gen_fc','gen_fc_activation','spconv','eqconv','wgan','dtype']:
+              'gen_fc','gen_fc_activation','spconv','eqconv','dtype']:
                 if x in larg:
                     setattr(args, x, larg[x])
             if not args.model_gen:
@@ -55,6 +54,7 @@ if __name__ == '__main__':
                 else:
                     args.load_models=os.path.join(root,'gen_g{}.npz'.format(larg["lrdecay_start"]+larg["lrdecay_period"]))
                     
+    args.random = False
     save_args(args, outdir)
     args.dtype = dtypes[args.dtype]
     args.dis_activation = activation[args.dis_activation]
@@ -65,12 +65,21 @@ if __name__ == '__main__':
     chainer.config.dtype = args.dtype
 
     ## load images
-    if args.val:
-        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=args.random, grey=args.grey)
-    elif args.train:
-        dataset = Dataset(args.train, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=args.random, grey=args.grey)
+    if args.imgtype=="dcm":
+        from dataset_dicom import Dataset
     else:
-        print("Specify a text file containing image file names to be converted.")
+        from dataset import Dataset  
+    if args.val:
+        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey)
+    elif args.train:
+        dataset = Dataset(args.train, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey)
+    else:
+        print("Load Dataset from disk: {}".format(args.root))
+        with open(os.path.join(args.out,"filenames.txt"),'w') as output:
+            for file in glob.glob(os.path.join(args.root,"**/*.{}".format(args.imgtype)), recursive=True):
+                output.write('{}\n'.format(file))
+        dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], crop=(args.crop_height,args.crop_width), random=False, grey=args.grey)
+        
 #    iterator = chainer.iterators.MultiprocessIterator(dataset, args.batch_size, n_processes=3, repeat=False, shuffle=False)
     iterator = chainer.iterators.MultithreadIterator(dataset, args.batch_size, n_threads=3, repeat=False, shuffle=False)   ## best performance
 #    iterator = chainer.iterators.SerialIterator(dataset, args.batch_size,repeat=False, shuffle=False)
@@ -96,6 +105,7 @@ if __name__ == '__main__':
     start = time.time()
 
     cnt = 0
+    salt = str(random.randint(1000, 999999))
     for batch in iterator:
         x_in, t_out = chainer.dataset.concat_examples(batch, device=args.gpu)
         imgs = Variable(x_in)
@@ -114,15 +124,13 @@ if __name__ == '__main__':
             print("\nProcessing {}".format(fn))
             new = dataset.var2img(out[i]) 
             print("raw value: {} {}".format(np.min(out[i]),np.max(out[i])))
-            #print(new.shape)
-            if len(new.shape)==3:
-                cc,ch,cw = new.shape
-            else:
-                cc=1
-                ch,cw = new.shape
-            h,w = dataset.crop
             path = os.path.join(outdir,os.path.basename(fn))
-            write_image(new, path)
+            # converted image
+            if args.imgtype=="dcm":
+                ref_dicom = dataset.overwrite(new[0],fn,salt)
+                ref_dicom.save_as(path)
+            else:
+                write_image(new, path)
 
             cnt += 1
         ####

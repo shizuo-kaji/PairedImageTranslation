@@ -18,6 +18,7 @@ from chainer.training import extensions
 from chainerui.extensions import CommandsExtension
 from chainerui.utils import save_args
 import chainer.functions as F
+from chainer.dataset import convert
 
 import net
 from updater import pixupdater
@@ -38,7 +39,12 @@ def main():
     #print('GPU availability:', chainer.cuda.available)
     #print('cuDNN availability:', chainer.cuda.cudnn_enabled)
 
+
     ## dataset preparation
+    if args.imgtype=="dcm":
+        from dataset_dicom import Dataset
+    else:
+        from dataset import Dataset  
     train_d = Dataset(args.train, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random, grey=args.grey)
     test_d = Dataset(args.val, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random, grey=args.grey)
 
@@ -60,11 +66,11 @@ def main():
     if args.model_gen:
         serializers.load_npz(args.model_gen, gen)
         print('model loaded: {}'.format(args.model_gen))
-        optimiser_files.append(args.model_gen.replace('gen_','opt_'))
+        optimiser_files.append(args.model_gen.replace('gen_','opt_gen_'))
     if args.model_dis:
         serializers.load_npz(args.model_dis, dis)
         print('model loaded: {}'.format(args.model_dis))
-        optimiser_files.append(args.model_dis.replace('dis_','opt_'))
+        optimiser_files.append(args.model_dis.replace('dis_','opt_dis_'))
 
     ## send models to GPU
     if args.gpu >= 0:
@@ -109,6 +115,7 @@ def main():
         optimizer={
             'gen': opt_gen,
             'dis': opt_dis},
+        converter=convert.ConcatWithAsyncTransfer(),
         params={'args': args},
         device=args.gpu)
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
@@ -131,7 +138,7 @@ def main():
             dis, 'dis_{.updater.epoch}.npz'), trigger=snapshot_interval)
         trainer.extend(extensions.dump_graph('dis/loss_real', out_name='dis.dot'))
         trainer.extend(extensions.snapshot_object(
-            opt_dis, 'opt_gen_{.updater.epoch}.npz'), trigger=snapshot_interval)
+            opt_dis, 'opt_dis_{.updater.epoch}.npz'), trigger=snapshot_interval)
 
     ## log outputs
     trainer.extend(extensions.LogReport(trigger=display_interval))

@@ -5,7 +5,7 @@ import chainer.functions as F
 import chainer.links as L
 import numpy as np
 
-#from instance_normalization import InstanceNormalization
+from instance_normalization import InstanceNormalization
 
 # normalisation selection
 def get_norm_layer(norm='instance'):
@@ -18,8 +18,8 @@ def get_norm_layer(norm='instance'):
     elif norm == 'rbatch':
         norm_layer = functools.partial(L.BatchRenormalization, use_gamma=False, use_beta=False)
     elif norm == 'instance':
-        norm_layer = functools.partial(L.GroupNormalization, 1)
-#        norm_layer = functools.partial(InstanceNormalization, use_gamma=False, use_beta=False)
+#        norm_layer = functools.partial(L.GroupNormalization, 1)   ## currently very slow
+        norm_layer = functools.partial(InstanceNormalization, use_gamma=False, use_beta=False)
     elif norm == 'fnorm':
         norm_layer = lambda x: feature_vector_normalization
     else:

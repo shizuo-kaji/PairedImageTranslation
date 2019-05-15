@@ -76,9 +76,9 @@ class Dataset(dataset_mixin.DatasetMixin):
             x_offset = random.randint(0, max(imgs_in.shape[2] - W,0))
             x_slice = slice(x_offset, x_offset + W)                
         else: # centre crop
-            y_offset = int(round((H - imgs_in.shape[1]) / 2.))
-            x_offset = int(round((W - imgs_in.shape[2]) / 2.))
-            y_slice = slice(y_offset, y_offset + imgs_in.shape[1])
-            x_slice = slice(x_offset, x_offset + imgs_in.shape[2])
+            y_offset = int(round((imgs_in.shape[1] - H) / 2.))
+            x_offset = int(round((imgs_in.shape[2] - W) / 2.))
+            y_slice = slice(y_offset, y_offset + H)
+            x_slice = slice(x_offset, x_offset + W)
         return imgs_in[:,y_slice,x_slice], imgs_out[:,y_slice,x_slice]
     
