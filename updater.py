@@ -72,6 +72,12 @@ class pixupdater(chainer.training.StandardUpdater):
         d = F.sqrt(dx**2 + dy**2 + xp.full(dx.data.shape, tau**2, dtype=dx.dtype))
         return(F.average(d))
 
+    def total_variation2(self,x,tau=None):
+        xp = cuda.get_array_module(x.data)
+        dx = x[:, :, 1:, :] - x[:, :, :-1, :]
+        dy = x[:, :, :, 1:] - x[:, :, :, :-1]
+        return F.average(F.absolute(dx))+F.average(F.absolute(dy))
+
     def update_core(self):        
         gen_optimizer = self.get_optimizer('gen')
         dis_optimizer = self.get_optimizer('dis')
@@ -106,7 +112,7 @@ class pixupdater(chainer.training.StandardUpdater):
             chainer.report({'loss_L2': loss_rec_l2}, gen)
         # total cariation
         if self.args.lambda_tv > 0:
-            loss_tv = self.total_variation(x_out, self.args.tv_tau)
+            loss_tv = self.total_variation2(x_out, self.args.tv_tau)
             loss_gen = loss_gen + self.args.lambda_tv * loss_tv
             chainer.report({'loss_tv': loss_tv}, gen)
  

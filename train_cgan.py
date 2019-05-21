@@ -15,7 +15,7 @@ matplotlib.use('Agg')
 import chainer
 from chainer import training,serializers
 from chainer.training import extensions
-from chainerui.extensions import CommandsExtension
+#from chainerui.extensions import CommandsExtension
 from chainerui.utils import save_args
 import chainer.functions as F
 from chainer.dataset import convert
@@ -115,7 +115,7 @@ def main():
         optimizer={
             'gen': opt_gen,
             'dis': opt_dis},
-        converter=convert.ConcatWithAsyncTransfer(),
+#        converter=convert.ConcatWithAsyncTransfer(),
         params={'args': args},
         device=args.gpu)
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
@@ -132,13 +132,17 @@ def main():
         gen, 'gen_{.updater.epoch}.npz'), trigger=snapshot_interval)
     trainer.extend(extensions.snapshot_object(
         opt_gen, 'opt_gen_{.updater.epoch}.npz'), trigger=snapshot_interval)
-    trainer.extend(extensions.dump_graph('gen/loss_L1', out_name='gen.dot'))
     if args.lambda_dis>0:
         trainer.extend(extensions.snapshot_object(
             dis, 'dis_{.updater.epoch}.npz'), trigger=snapshot_interval)
         trainer.extend(extensions.dump_graph('dis/loss_real', out_name='dis.dot'))
         trainer.extend(extensions.snapshot_object(
             opt_dis, 'opt_dis_{.updater.epoch}.npz'), trigger=snapshot_interval)
+
+    if args.lambda_rec_l1 > 0:
+        trainer.extend(extensions.dump_graph('gen/loss_L1', out_name='gen.dot'))
+    elif args.lambda_rec_l2 > 0:
+        trainer.extend(extensions.dump_graph('gen/loss_L2', out_name='gen.dot'))
 
     ## log outputs
     trainer.extend(extensions.LogReport(trigger=display_interval))
@@ -156,8 +160,8 @@ def main():
     trainer.extend(VisEvaluator({"test":test_iter, "train":test_iter_gt}, {"gen":gen},
             params={'vis_out': vis_folder}, device=args.gpu),trigger=preview_interval )
 
-    # ChainerUI
-    trainer.extend(CommandsExtension())
+    # ChainerUI: removed until ChainerUI updates to be compatible with Chainer 6.0
+#    trainer.extend(CommandsExtension())
 
     # Run the training
     print("trainer start")

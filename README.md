@@ -62,7 +62,7 @@ Crop size may have to be a power of two, if you encounter any error regarding th
 
 Sample images of Radon transform can be created by 
 ```
-python create_shapes_sinogram.py
+python util/create_shapes_sinogram.py
 ```
 which corresponds to the included ct_reconst_train.txt and ct_reconst_val.txt
 
