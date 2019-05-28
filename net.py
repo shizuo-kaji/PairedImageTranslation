@@ -377,7 +377,7 @@ class Discriminator(chainer.Chain):
         self.activation = args.dis_activation
         self.wgan = args.wgan
         self.chs = args.dis_chs
-
+        dis_out = 2 if args.dis_weighting else 1
         with self.init_scope():
             self.c0 = CBR(None, self.chs[0], ksize=args.dis_ksize, norm='none', 
                           sample=args.dis_sample, activation=args.dis_activation,
@@ -392,7 +392,7 @@ class Discriminator(chainer.Chain):
             if self.wgan:
                 self.fc = L.Linear(None, 1)
             else:
-                self.cl = CBR(2*self.chs[-1], 1, ksize=args.dis_ksize, norm='none', sample='none', activation=None, dropout=False, equalised=args.eqconv, separable=args.spconv)
+                self.cl = CBR(2*self.chs[-1], dis_out, ksize=args.dis_ksize, norm='none', sample='none', activation=None, dropout=False, equalised=args.eqconv, separable=args.spconv)
 
     def __call__(self, x):
         h = self.c0(x)

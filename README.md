@@ -24,6 +24,12 @@ Phillip Isola, Jun-Yan Zhu, Tinghui Zhou, Alexei A. Efros, CVPR, 2017
 
 with some improvements.
 
+Look at out paper 
+"Overview of image-to-image translation using deep neural networks: denoising, super-resolution, modality-conversion, and reconstruction in medical imaging"
+by Shizuo Kaji and Satoshi Kida
+[arXiv:1905.08603](https://arxiv.org/abs/1905.08603)
+
+
 ### Requirements
 - a modern GPU
 - python 3: [Anaconda](https://anaconda.org) is recommended

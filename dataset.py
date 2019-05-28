@@ -40,6 +40,9 @@ class Dataset(dataset_mixin.DatasetMixin):
         with open(datalist) as input:
             for line in input:
                 files = line.strip().split('\t')
+                if(len(files)<len(set(from_col).union(set(to_col)))):
+                    print("Error in reading data file: ",files)
+                    exit()
                 self.dataset.append([
                     [os.path.join(DataDir,files[i]) for i in from_col],
                     [os.path.join(DataDir,files[i]) for i in to_col]

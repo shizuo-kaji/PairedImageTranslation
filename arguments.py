@@ -47,6 +47,8 @@ def arguments():
     parser.add_argument('--lambda_mispair', '-lm', type=float, default=1.0)
     parser.add_argument('--tv_tau', '-tt', type=float, default=1e-3,
                         help='smoothing parameter for total variation')
+    parser.add_argument('--loss_ksize', '-lk', type=int, default=1,
+                        help='take average pooling of this kernel size before computing L1 and L2 losses')
 
     parser.add_argument('--load_optimizer', '-op', action='store_true', help='load optimizer parameters')
     parser.add_argument('--model_gen', '-m', default='')
@@ -91,8 +93,10 @@ def arguments():
                         help='dropout ratio for discriminator')
     parser.add_argument('--dis_norm', '-dn', default='instance',
                         choices=['instance', 'batch','batch_aff', 'rbatch', 'fnorm', 'none'])
+    parser.add_argument('--dis_weighting', '-dw', action='store_true',
+                        help='Weight discriminators loss depending on patch')
 
-    # generator: G: A -> B, F: B -> A
+    # generator
     parser.add_argument('--gen_activation', '-ga', default='relu', choices=activation.keys())
     parser.add_argument('--gen_fc_activation', '-gfca', default='relu', choices=activation.keys())
     parser.add_argument('--gen_out_activation', '-go', default='tanh', choices=activation.keys())
@@ -123,11 +127,17 @@ def arguments():
 
     args = parser.parse_args()
     args.out = os.path.join(args.out, dt.now().strftime('%m%d_%H%M')+"_cgan")
+    args.wgan=False
+
+    if not args.gen_chs:
+        args.gen_chs = [int(args.gen_basech) * (2**i) for i in range(args.gen_ndown)]
+    if not args.dis_chs:
+        args.dis_chs = [int(args.dis_basech) * (2**i) for i in range(args.dis_ndown)]
+
     save_args(args, args.out)
     print(args)
     print(args.out)
 
-    args.wgan=False
     args.dtype = dtypes[args.dtype]
     args.dis_activation = activation[args.dis_activation]
     args.gen_activation = activation[args.gen_activation]
@@ -135,11 +145,6 @@ def arguments():
     args.gen_out_activation = activation[args.gen_out_activation]
     args.lrdecay_start = args.epoch//2
     args.lrdecay_period = args.epoch - args.lrdecay_start
-
-    if not args.gen_chs:
-        args.gen_chs = [int(args.gen_basech) * (i+1) for i in range(args.gen_ndown)]
-    if not args.dis_chs:
-        args.dis_chs = [int(args.dis_basech) * (i+1) for i in range(args.dis_ndown)]
 
     return(args)
 

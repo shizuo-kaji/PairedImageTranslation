@@ -57,11 +57,21 @@ class pixupdater(chainer.training.StandardUpdater):
         self.xp = self.gen.xp
         self._buffer = ImagePool(50 * self.args.batch_size)
 
-    def loss_func_comp(self, y, val, noise=0):
+    def loss_func_comp(self,y, val, noise=0, lambda_reg=1.0):
+        xp = cuda.get_array_module(y.data)
         if noise>0:
             val += random.normalvariate(0,noise)   ## jitter for the target value
-        target = self.xp.full(y.data.shape, val, dtype=y.dtype)
-        return F.mean_squared_error(y, target)
+    #        val += random.uniform(-noise, noise)   ## jitter for the target value
+        shape = y.data.shape
+        if y.shape[1] == 2:
+            shape = (shape[0],1,shape[2],shape[3])
+            target = xp.full(shape, val, dtype=y.dtype)
+            W = F.sigmoid(y[:,1,:,:])
+            loss = F.average( ((y[:,0,:,:]-target)**2) * W )  ## weighted loss
+            return loss + lambda_reg * F.mean_squared_error(W,xp.ones(W.shape,dtype=W.dtype))
+        else:
+            target = xp.full(shape, val, dtype=y.dtype)
+            return F.mean_squared_error(y, target)
 
     def total_variation(self,x,tau=1e-6):
         xp = cuda.get_array_module(x.data)
@@ -77,6 +87,18 @@ class pixupdater(chainer.training.StandardUpdater):
         dx = x[:, :, 1:, :] - x[:, :, :-1, :]
         dy = x[:, :, :, 1:] - x[:, :, :, :-1]
         return F.average(F.absolute(dx))+F.average(F.absolute(dy))
+
+    def loss_avg(self, x,y, ksize=3, norm='l2'):
+        if ksize>1:
+            ax = F.average_pooling_2d(x,ksize,1,0)
+            ay = F.average_pooling_2d(y,ksize,1,0)
+        else:
+            ax = x
+            ay = y
+        if norm=='l1':
+            return F.mean_absolute_error(ax,ay)
+        else:
+            return F.mean_squared_error(ax,ay)
 
     def update_core(self):        
         gen_optimizer = self.get_optimizer('gen')
@@ -103,11 +125,13 @@ class pixupdater(chainer.training.StandardUpdater):
         loss_gen=0
         # reconstruction error
         if self.args.lambda_rec_l1>0:
-            loss_rec_l1 = F.mean_absolute_error(x_out, t_out)
+#            loss_rec_l1 = F.mean_absolute_error(x_out, t_out)
+            loss_rec_l1 = self.loss_avg(x_out, t_out, ksize=self.args.loss_ksize, norm='l1')
             loss_gen = loss_gen + self.args.lambda_rec_l1*loss_rec_l1       
             chainer.report({'loss_L1': loss_rec_l1}, gen)
         if self.args.lambda_rec_l2>0:
-            loss_rec_l2 = F.mean_squared_error(x_out, t_out)
+#            loss_rec_l2 = F.mean_squared_error(x_out, t_out)
+            loss_rec_l2 = self.loss_avg(x_out, t_out, ksize=self.args.loss_ksize, norm='l2')
             loss_gen = loss_gen + self.args.lambda_rec_l2*loss_rec_l2
             chainer.report({'loss_L2': loss_rec_l2}, gen)
         # total cariation
