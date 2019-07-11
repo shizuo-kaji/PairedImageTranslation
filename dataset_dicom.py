@@ -8,13 +8,17 @@ import numpy as np
 from skimage.transform import rescale
 from scipy.misc import imresize
 from chainercv.transforms import random_crop,center_crop
+from consts import dtypes
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, crop=None, random=False, grey=True):
+    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), random=False, grey=True):
         self.dataset = []
         self.base = -1024
         self.range = 2000
-        self.crop = crop
+        if not crop[0]:
+            self.crop = (384,480)  ## default for the CBCT dataset
+        else:
+            self.crop = crop
         self.grey = True
         self.random = random # random crop/flip for data augmentation
         self.dtype = np.float32

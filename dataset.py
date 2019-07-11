@@ -34,7 +34,7 @@ def stack_imgs(fns,crop,resize=False,grey=False):
 
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, crop=None, random=False, grey=False):
+    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), random=False, grey=False):
         self.dataset = []
         ## an input/output image can consist of multiple images; they are stacked as channels
         with open(datalist) as input:
@@ -51,16 +51,21 @@ class Dataset(dataset_mixin.DatasetMixin):
                     if not os.path.isfile(os.path.join(DataDir,files[i])):
                         print("{} not found!".format(os.path.join(DataDir,files[i])))
                         exit()
-        self.crop = crop
+        if not crop[0] or crop[1]:
+            img = read_image(self.dataset[i][0][0])
+            self.crop = ( 16*((img.shape[1]-random)//16), 16*((img.shape[2]-random)//16) )
+        else:
+            self.crop = crop
         self.grey = grey
-        self.random = random # random crop/flip for data augmentation
+        self.random = random
+        print("Cropped size: ",self.crop)
         print("loaded {} images".format(len(self.dataset)))
     
     def __len__(self):
         return len(self.dataset)
 
     def get_img_path(self, i):
-        return '{:s}'.format(self.dataset[i][0][0])
+        return(self.dataset[i][0][0])
 
     def var2img(self,var):
         return(0.5*(1.0+var)*255)
@@ -74,9 +79,12 @@ class Dataset(dataset_mixin.DatasetMixin):
             if random.choice([True, False]):
                 imgs_in = imgs_in[:, :, ::-1]
                 imgs_out = imgs_out[:, :, ::-1]
-            y_offset = random.randint(0, max(imgs_in.shape[1] - H,0))
+            if random.choice([True, False]):
+                imgs_in = imgs_in[:, ::-1, :]
+                imgs_out = imgs_out[:, ::-1, :]
+            y_offset = random.randint((imgs_in.shape[1]-H)//2-self.random, max(imgs_in.shape[1] - H,0))
             y_slice = slice(y_offset, y_offset + H)
-            x_offset = random.randint(0, max(imgs_in.shape[2] - W,0))
+            x_offset = random.randint((imgs_in.shape[2]-W)//2-self.random, max(imgs_in.shape[2] - W,0))
             x_slice = slice(x_offset, x_offset + W)                
         else: # centre crop
             y_offset = int(round((imgs_in.shape[1] - H) / 2.))

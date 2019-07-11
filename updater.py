@@ -53,7 +53,6 @@ class pixupdater(chainer.training.StandardUpdater):
         params = kwargs.pop('params')
         super(pixupdater, self).__init__(*args, **kwargs)
         self.args = params['args']
-        self.init_alpha = self.get_optimizer('gen').alpha
         self.xp = self.gen.xp
         self._buffer = ImagePool(50 * self.args.batch_size)
 
@@ -105,15 +104,6 @@ class pixupdater(chainer.training.StandardUpdater):
         dis_optimizer = self.get_optimizer('dis')
         gen, dis = self.gen, self.dis
 
-        ## decay learning rate
-        if self.is_new_epoch and self.epoch >= self.args.lrdecay_start:
-            decay_step = self.init_alpha / self.args.lrdecay_period
-#            print('lr decay', decay_step)
-            if gen_optimizer.alpha > decay_step:
-                gen_optimizer.alpha -= decay_step
-            if dis_optimizer.alpha > decay_step:
-                dis_optimizer.alpha -= decay_step
-
         ## image conversion
         batch = self.get_iterator('main').next()
         x_in, t_out = self.converter(batch, self.device)
@@ -134,13 +124,13 @@ class pixupdater(chainer.training.StandardUpdater):
             loss_rec_l2 = self.loss_avg(x_out, t_out, ksize=self.args.loss_ksize, norm='l2')
             loss_gen = loss_gen + self.args.lambda_rec_l2*loss_rec_l2
             chainer.report({'loss_L2': loss_rec_l2}, gen)
-        # total cariation
+        # total variation
         if self.args.lambda_tv > 0:
             loss_tv = self.total_variation2(x_out, self.args.tv_tau)
             loss_gen = loss_gen + self.args.lambda_tv * loss_tv
             chainer.report({'loss_tv': loss_tv}, gen)
  
-        # discriminator error
+        # Adversarial loss
         if self.args.lambda_dis>0:
             y_fake = dis(F.concat([x_in, x_out]))
             #batchsize,_,w,h = y_fake.data.shape
@@ -152,7 +142,7 @@ class pixupdater(chainer.training.StandardUpdater):
         # update generator model
         gen.cleargrads()
         loss_gen.backward()
-        gen_optimizer.update()
+        gen_optimizer.update(loss=loss_gen)
 
         ## discriminator
         if self.args.lambda_dis>0:
@@ -168,7 +158,7 @@ class pixupdater(chainer.training.StandardUpdater):
                 chainer.report({'loss_mispair': loss_mispair}, dis)
             else:
                 loss_mispair = 0
-            loss_dis = loss_fake + loss_real + self.args.lambda_mispair * loss_mispair
+            loss_dis = 0.5*(loss_fake + loss_real) + self.args.lambda_mispair * loss_mispair
             dis.cleargrads()
             loss_dis.backward()
-            dis_optimizer.update()
+            dis_optimizer.update(loss=loss_dis)

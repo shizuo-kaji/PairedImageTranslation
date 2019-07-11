@@ -37,7 +37,7 @@ by Shizuo Kaji and Satoshi Kida
 ```
 pip install cupy,chainer,chainerui,chainercv
 ```
-- optional: pydicom (if DICOM files are handled)
+- optional: pydicom (if DICOM files are to be handled)
 ```
 pip install pydicom
 ```
@@ -66,22 +66,25 @@ The loss consists of L2 reconstruction error, discriminator, and total variation
 
 Crop size may have to be a power of two, if you encounter any error regarding the "shape of array".
 
-Sample images of Radon transform can be created by 
-```
-python util/create_shapes_sinogram.py
-```
-which corresponds to the included ct_reconst_train.txt and ct_reconst_val.txt
+During training, it occasionally produces image files under "results/vis" containing original, ground truth, and converted images in each row. 
 
 For a list of command-line arguments,
 
 ```python train_cgan.py -h```
 
-### Conversion with a trained model
+## Conversion with a trained model
 ```
 python convert.py -b 10 -a results/args --val ct_reconst_val.txt -R radon -o converted -m results/gen_200.npz
 ```
 converts image files in ct_reconstruct_val.txt using a learnt model "results/gen_200.npz" and outputs the result to "converted/".
 A larger batch size (-b 10) increases the conversion speed but may consume too much memory.
+
+## Inverse Radon transform demo (reconstruction from sinogram)
+Sample images of Radon transform can be created by 
+```
+python util/create_shapes_sinogram.py
+```
+which corresponds to the included ct_reconst_train.txt and ct_reconst_val.txt
 
 ## Denoising demo with DICOM files
 We use the [CPTAC-SAR dataset](https://wiki.cancerimagingarchive.net/display/Public/CPTAC-SAR) hosted by
@@ -99,7 +102,7 @@ Also, you will get a text file "CPTAC-SAR.txt" containing image file names.
 Name them "CPTAC-SAR_train.txt" and "CPTAC-SAR_val.txt"
 - Start training by
 ```
-python train_cgan.py -t CPTAC-SAR_train.txt --val CPTAC-SAR_val.txt --it dcm -ch 480 -cw 480 -g 0 -e 50 -gc 32 64 128 -l1 1.0 -l2 0 -ldis 0.1 -ltv 1e-4 -R images -o result -vf 2000
+python train_cgan.py -t CPTAC-SAR_train.txt --val CPTAC-SAR_val.txt -it dcm -ch 480 -cw 480 -g 0 -e 50 -gc 32 64 128 -l1 1.0 -l2 0 -ldis 0.1 -ltv 1e-4 -R images -o result -vf 2000
 ```
 It takes a while. You will see some intermediate outputs under "result".
 - Denoise validation images (which are not used for training) using the trained model "gen_50.npz".

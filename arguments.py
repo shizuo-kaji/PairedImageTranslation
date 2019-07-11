@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 import chainer.functions as F
-from consts import activation,dtypes
+from consts import activation_func,dtypes,uplayer,downlayer,norm_layer,optim,unettype
 import os
 from datetime import datetime as dt
 from chainerui.utils import save_args
@@ -35,24 +35,25 @@ def arguments():
     parser.add_argument('--nvis', type=int, default=3,
                         help='number of images in visualisation after each epoch')
 
-    parser.add_argument('--crop_width', '-cw', type=int, default=128, help='better to have a value divisible by a large power of two')
-    parser.add_argument('--crop_height', '-ch', type=int, default=128, help='better to have a value divisible by a large power of two')
-    parser.add_argument('--grey', action='store_true',
-                        help='greyscale')
+    parser.add_argument('--crop_width', '-cw', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
+    parser.add_argument('--crop_height', '-ch', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
+    parser.add_argument('--grey', action='store_true', help='greyscale')
 
-    parser.add_argument('--lambda_rec_l1', '-l1', type=float, default=1.0)
-    parser.add_argument('--lambda_rec_l2', '-l2', type=float, default=0.0)
-    parser.add_argument('--lambda_dis', '-ldis', type=float, default=0.1)
-    parser.add_argument('--lambda_tv', '-ltv', type=float, default=0.0)
-    parser.add_argument('--lambda_mispair', '-lm', type=float, default=1.0)
+    parser.add_argument('--lambda_rec_l1', '-l1', type=float, default=1.0, help='weight for L1 reconstruction loss')
+    parser.add_argument('--lambda_rec_l2', '-l2', type=float, default=0.0, help='weight for L2 reconstruction loss')
+    parser.add_argument('--lambda_dis', '-ldis', type=float, default=1.0, help='weight for adversarial loss')
+    parser.add_argument('--lambda_tv', '-ltv', type=float, default=0.0, help='weight for total variation')
+    parser.add_argument('--lambda_mispair', '-lm', type=float, default=0, help='weight for discriminator rejecting mis-matched (real,real) pairs')
     parser.add_argument('--tv_tau', '-tt', type=float, default=1e-3,
                         help='smoothing parameter for total variation')
     parser.add_argument('--loss_ksize', '-lk', type=int, default=1,
                         help='take average pooling of this kernel size before computing L1 and L2 losses')
 
-    parser.add_argument('--load_optimizer', '-op', action='store_true', help='load optimizer parameters')
+    parser.add_argument('--load_optimizer', '-mo', action='store_true', help='load optimizer parameters')
     parser.add_argument('--model_gen', '-m', default='')
     parser.add_argument('--model_dis', '-md', default='')
+    parser.add_argument('--optimizer', '-op',choices=optim.keys(),default='Adam',
+                        help='optimizer')
 
     parser.add_argument('--dtype', '-dt', choices=dtypes.keys(), default='fp32',
                         help='floating point precision')
@@ -60,21 +61,21 @@ def arguments():
                         help='Equalised Convolution')
     parser.add_argument('--spconv', '-sp', action='store_true',
                         help='Separable Convolution')
-    parser.add_argument('--weight_decay', '-wd', type=float, default=0,  #default:  1e-7
+    parser.add_argument('--weight_decay', '-wd', type=float, default=1e-8,  #default:  1e-7
                         help='weight decay for regularization')
     parser.add_argument('--weight_decay_norm', '-wn', choices=['l1','l2'], default='l2',
                         help='norm of weight decay for regularization')
-    parser.add_argument('--vis_freq', '-vf', type=int, default=4000,
+    parser.add_argument('--vis_freq', '-vf', type=int, default=None,
                         help='visualisation frequency in iteration')
 
     # data augmentation
-    parser.add_argument('--random', '-rt', default=True, help='random flip/crop')
+    parser.add_argument('--random_translate', '-rt', type=int, default=4, help='jitter input images by random translation')
     parser.add_argument('--noise', '-n', type=float, default=0, help='strength of noise injection')
     parser.add_argument('--noise_z', '-nz', type=float, default=0,
                         help='strength of noise injection for the latent variable')
 
     # discriminator
-    parser.add_argument('--dis_activation', '-da', default='lrelu', choices=activation.keys())
+    parser.add_argument('--dis_activation', '-da', default='lrelu', choices=activation_func.keys())
     parser.add_argument('--dis_ksize', '-dk', type=int, default=4,    # default 4
                         help='kernel size for patchGAN discriminator')
     parser.add_argument('--dis_chs', '-dc', type=int, nargs="*", default=None,
@@ -83,7 +84,7 @@ def arguments():
                         help='the base number of channels in discriminator (doubled in each down-layer)')
     parser.add_argument('--dis_ndown', '-dl', type=int, default=3,
                         help='number of down layers in discriminator')
-    parser.add_argument('--dis_down', '-dd', default='down', choices=['down','maxpool','maxpool_res','avgpool','avgpool_res','none'],  ## default down
+    parser.add_argument('--dis_down', '-dd', default='down', choices=downlayer,  ## default down
                         help='type of down layers in discriminator')
     parser.add_argument('--dis_sample', '-ds', default='none',          ## default down
                         help='type of first conv layer for patchGAN discriminator')
@@ -92,14 +93,14 @@ def arguments():
     parser.add_argument('--dis_dropout', '-ddo', type=float, default=None, 
                         help='dropout ratio for discriminator')
     parser.add_argument('--dis_norm', '-dn', default='instance',
-                        choices=['instance', 'batch','batch_aff', 'rbatch', 'fnorm', 'none'])
-    parser.add_argument('--dis_weighting', '-dw', action='store_true',
-                        help='Weight discriminators loss depending on patch')
+                        choices=norm_layer)
+    parser.add_argument('--dis_reg_weighting', '-dw', type=float, default=0,
+                        help='regularisation of weighted discriminator. Set 0 to disable weighting')
 
     # generator
-    parser.add_argument('--gen_activation', '-ga', default='relu', choices=activation.keys())
-    parser.add_argument('--gen_fc_activation', '-gfca', default='relu', choices=activation.keys())
-    parser.add_argument('--gen_out_activation', '-go', default='tanh', choices=activation.keys())
+    parser.add_argument('--gen_activation', '-ga', default='relu', choices=activation_func.keys())
+    parser.add_argument('--gen_fc_activation', '-gfca', default='relu', choices=activation_func.keys())
+    parser.add_argument('--gen_out_activation', '-go', default='tanh', choices=activation_func.keys())
     parser.add_argument('--gen_chs', '-gc', type=int, nargs="*", default=None,
                         help='Number of channels in down layers in generator')
     parser.add_argument('--gen_ndown', '-gl', type=int, default=4,
@@ -108,21 +109,21 @@ def arguments():
                         help='the base number of channels in generator (doubled in each down-layer)')
     parser.add_argument('--gen_fc', '-gfc', type=int, default=0,
                         help='number of fc layers before convolutional layers')
-    parser.add_argument('--gen_nblock', '-nb', type=int, default=9,  # default 9
+    parser.add_argument('--gen_nblock', '-gnb', type=int, default=9,  # default 9
                         help='number of residual blocks in generators')
     parser.add_argument('--gen_ksize', '-gk', type=int, default=3,    # default 4
                         help='kernel size for generator')
     parser.add_argument('--gen_sample', '-gs', default='none',
                         help='first and last conv layers for generator')
-    parser.add_argument('--gen_down', '-gd', default='down', choices=['down','maxpool','maxpool_res','avgpool','avgpool_res','none'],
+    parser.add_argument('--gen_down', '-gd', default='down', choices=downlayer,
                         help='down layers in generator')
-    parser.add_argument('--gen_up', '-gu', default='resize', choices=['unpool','unpool_res','deconv','pixsh','resize','resize_res','none'],
+    parser.add_argument('--gen_up', '-gu', default='resize', choices=uplayer,
                         help='up layers in generator')
     parser.add_argument('--gen_dropout', '-gdo', type=float, default=None, 
                         help='dropout ratio for generator')
     parser.add_argument('--gen_norm', '-gn', default='instance',
-                        choices=['instance', 'batch','batch_aff', 'rbatch', 'fnorm', 'none'])
-    parser.add_argument('--unet', '-u', default='none', choices=['none','no_last','with_last'],
+                        choices=norm_layer)
+    parser.add_argument('--unet', '-u', default='concat', choices=unettype,
                         help='use u-net for generator')
 
     args = parser.parse_args()
@@ -136,15 +137,7 @@ def arguments():
 
     save_args(args, args.out)
     print(args)
-    print(args.out)
-
-    args.dtype = dtypes[args.dtype]
-    args.dis_activation = activation[args.dis_activation]
-    args.gen_activation = activation[args.gen_activation]
-    args.gen_fc_activation = activation[args.gen_fc_activation]
-    args.gen_out_activation = activation[args.gen_out_activation]
-    args.lrdecay_start = args.epoch//2
-    args.lrdecay_period = args.epoch - args.lrdecay_start
+    print("\nresults are saved under: ",args.out)
 
     return(args)
 

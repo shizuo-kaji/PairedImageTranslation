@@ -5,9 +5,6 @@
 ##
 #############################
 
-import warnings
-warnings.filterwarnings("ignore")
-
 import argparse
 import os
 import glob
@@ -25,7 +22,7 @@ from chainercv.utils import write_image
 from chainercv.transforms import resize
 from chainerui.utils import save_args
 from arguments import arguments 
-from consts import activation,dtypes
+from consts import dtypes
 
 
 if __name__ == '__main__':
@@ -50,19 +47,12 @@ if __name__ == '__main__':
                     setattr(args, x, larg[x])
             if not args.model_gen:
                 if larg["epoch"]:
-                    args.load_models=os.path.join(root,'gen_g{}.npz'.format(larg["epoch"]))
-                else:
-                    args.load_models=os.path.join(root,'gen_g{}.npz'.format(larg["lrdecay_start"]+larg["lrdecay_period"]))
+                    args.model_gen=os.path.join(root,'gen_{}.npz'.format(larg["epoch"]))
                     
     args.random = False
     save_args(args, outdir)
-    args.dtype = dtypes[args.dtype]
-    args.dis_activation = activation[args.dis_activation]
-    args.gen_activation = activation[args.gen_activation]
-    args.gen_out_activation = activation[args.gen_out_activation]
-    args.gen_fc_activation = activation[args.gen_fc_activation]
     print(args)
-    chainer.config.dtype = args.dtype
+    chainer.config.dtype = dtypes[args.dtype]
 
     ## load images
     if args.imgtype=="dcm":
@@ -97,7 +87,7 @@ if __name__ == '__main__':
                 gen.to_gpu()
             xp = gen.xp
     else:
-        print("Specify a learnt model.")
+        print("Specify a learned model.")
         exit()        
 
     ## start measuring timing

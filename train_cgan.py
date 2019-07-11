@@ -26,27 +26,26 @@ from arguments import arguments
 
 from dataset import Dataset
 from visualizer import VisEvaluator
-from consts import activation,dtypes
+from consts import dtypes,optim
 
 def main():
     args = arguments()
 
 #    chainer.config.type_check = False
     chainer.config.autotune = True
-    chainer.config.dtype = args.dtype
+    chainer.config.dtype = dtypes[args.dtype]
     chainer.print_runtime_info()
     #print('Chainer version: ', chainer.__version__)
     #print('GPU availability:', chainer.cuda.available)
     #print('cuDNN availability:', chainer.cuda.cudnn_enabled)
-
 
     ## dataset preparation
     if args.imgtype=="dcm":
         from dataset_dicom import Dataset
     else:
         from dataset import Dataset  
-    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random, grey=args.grey)
-    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random, grey=args.grey)
+    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random_translate, grey=args.grey)
+    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random_translate, grey=args.grey)
 
     # setup training/validation data iterators
     train_iter = chainer.iterators.SerialIterator(train_d, args.batch_size)
@@ -78,20 +77,23 @@ def main():
         gen.to_gpu()
         dis.to_gpu()
 
-    ## Setup optimisers
-    def make_optimizer(model, alpha=0.0002, beta1=0.5):
-        eps = 1e-5 if args.dtype==np.float16 else 1e-8
-        optimizer = chainer.optimizers.Adam(alpha=alpha, beta1=beta1, eps=eps)
-        optimizer.setup(model)
+    # Setup optimisers
+    def make_optimizer(model, lr, opttype='Adam'):
+#        eps = 1e-5 if args.dtype==np.float16 else 1e-8
+        optimizer = optim[opttype](lr)
         if args.weight_decay>0:
-            if args.weight_decay_norm =='l2':
-                optimizer.add_hook(chainer.optimizer.WeightDecay(args.weight_decay))
+            if opttype in ['Adam','AdaBound','Eve']:
+                optimizer.weight_decay_rate = args.weight_decay
             else:
-                optimizer.add_hook(chainer.optimizer_hooks.Lasso(args.weight_decay))
+                if args.weight_decay_norm =='l2':
+                    optimizer.add_hook(chainer.optimizer.WeightDecay(args.weight_decay))
+                else:
+                    optimizer.add_hook(chainer.optimizer_hooks.Lasso(args.weight_decay))
+        optimizer.setup(model)
         return optimizer
 
-    opt_gen = make_optimizer(gen,alpha=args.learning_rate)
-    opt_dis = make_optimizer(dis,alpha=args.learning_rate)
+    opt_gen = make_optimizer(gen,args.learning_rate,args.optimizer)
+    opt_dis = make_optimizer(dis,args.learning_rate,args.optimizer)
     optimizers = {'opt_g':opt_gen, 'opt_d':opt_dis}
 
     ## resume optimisers from file
@@ -125,8 +127,6 @@ def main():
         args.snapinterval = args.epoch
     snapshot_interval = (args.snapinterval, 'epoch')
     display_interval = (args.display_interval, 'iteration')
-    preview_interval = (args.vis_freq, 'iteration')
-#    preview_interval = (1, 'epoch')
         
     trainer.extend(extensions.snapshot_object(
         gen, 'gen_{.updater.epoch}.npz'), trigger=snapshot_interval)
@@ -145,20 +145,33 @@ def main():
         trainer.extend(extensions.dump_graph('gen/loss_L2', out_name='gen.dot'))
 
     ## log outputs
+    log_keys = ['epoch', 'iteration','lr']
+    log_keys_gen = ['gen/loss_L1', 'gen/loss_L2', 'gen/loss_dis', 'myval/loss_L2', 'gen/loss_tv']
+    log_keys_dis = ['dis/loss_real','dis/loss_fake','dis/loss_mispair']
     trainer.extend(extensions.LogReport(trigger=display_interval))
-    trainer.extend(extensions.PrintReport([
-        'epoch', 'iteration', 'gen/loss_L1', 'gen/loss_L2', 'myval/loss_L2', 'gen/loss_dis', 'gen/loss_tv', 'dis/loss_fake','dis/loss_real','dis/loss_mispair'
-    ]), trigger=display_interval)
+    trainer.extend(extensions.PrintReport(log_keys+log_keys_gen+log_keys_dis), trigger=display_interval)
     if extensions.PlotReport.available():
-        trainer.extend(extensions.PlotReport(['gen/loss_L1', 'gen/loss_L2', 'gen/loss_dis', 'myval/loss_L2', 'gen/loss_tv'], 'iteration', trigger=display_interval, file_name='loss_gen.png'))
-        trainer.extend(extensions.PlotReport(['dis/loss_real','dis/loss_fake','dis/loss_mispair'], 'iteration', trigger=display_interval, file_name='loss_dis.png'))
+        trainer.extend(extensions.PlotReport(log_keys_gen, 'iteration', trigger=display_interval, file_name='loss_gen.png'))
+        trainer.extend(extensions.PlotReport(log_keys_dis, 'iteration', trigger=display_interval, file_name='loss_dis.png'))
     trainer.extend(extensions.ProgressBar(update_interval=10))
+    trainer.extend(extensions.ParameterStatistics(gen))
+    # learning rate scheduling
+    if args.optimizer in ['SGD','Momentum','AdaGrad','RMSprop']:
+        trainer.extend(extensions.observe_lr(optimizer_name='gen'), trigger=display_interval)
+        trainer.extend(extensions.ExponentialShift('lr', 0.33, optimizer=opt_gen), trigger=(args.epoch/5, 'epoch'))
+        trainer.extend(extensions.ExponentialShift('lr', 0.33, optimizer=opt_dis), trigger=(args.epoch/5, 'epoch'))
+    elif args.optimizer in ['Adam','AdaBound','Eve']:
+        trainer.extend(extensions.observe_lr(optimizer_name='gen'), trigger=display_interval)
+        trainer.extend(extensions.ExponentialShift("alpha", 0.33, optimizer=opt_gen), trigger=(args.epoch/5, 'epoch'))
+        trainer.extend(extensions.ExponentialShift("alpha", 0.33, optimizer=opt_dis), trigger=(args.epoch/5, 'epoch'))
 
     # evaluation
     vis_folder = os.path.join(args.out, "vis")
     os.makedirs(vis_folder, exist_ok=True)
+    if not args.vis_freq:
+        args.vis_freq = len(train_d)//2        
     trainer.extend(VisEvaluator({"test":test_iter, "train":test_iter_gt}, {"gen":gen},
-            params={'vis_out': vis_folder}, device=args.gpu),trigger=preview_interval )
+            params={'vis_out': vis_folder}, device=args.gpu),trigger=(args.vis_freq, 'iteration') )
 
     # ChainerUI: removed until ChainerUI updates to be compatible with Chainer 6.0
 #    trainer.extend(CommandsExtension())
