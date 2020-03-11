@@ -71,8 +71,8 @@ class Dataset(dataset_mixin.DatasetMixin):
                         ])
                     else:
                         self.dataset.append([
-                            [os.path.join(DataDir,files[i]) for i in to_col],
-                            [os.path.join(DataDir,files[i]) for i in from_col]
+                            [os.path.join(DataDir,files[i]) for i in from_col],
+                            [os.path.join(DataDir,files[i]) for i in to_col]
                         ])
                     for i in set(from_col).union(set(to_col)):
                         if not os.path.isfile(os.path.join(DataDir,files[i])):
