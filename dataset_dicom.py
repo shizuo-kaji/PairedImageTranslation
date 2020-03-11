@@ -5,13 +5,12 @@ import glob
 
 from chainer.dataset import dataset_mixin
 import numpy as np
-from skimage.transform import rescale
-from scipy.misc import imresize
-from chainercv.transforms import random_crop,center_crop
+#from skimage.transform import rescale
+from chainercv.transforms import random_crop,center_crop, resize
 from consts import dtypes
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), random=False, grey=True):
+    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), random=False, grey=True, imgtype='dcm', BtoA=False):
         self.dataset = []
         self.base = -1024
         self.range = 2000
@@ -26,10 +25,16 @@ class Dataset(dataset_mixin.DatasetMixin):
         with open(datalist) as input:
             for line in input:
                 files = line.strip().split('\t')
-                self.dataset.append([
-                    [os.path.join(DataDir,files[i]) for i in from_col],
-                    [os.path.join(DataDir,files[i]) for i in to_col]
-                ])
+                if BtoA:
+                    self.dataset.append([
+                        [os.path.join(DataDir,files[i]) for i in to_col],
+                        [os.path.join(DataDir,files[i]) for i in from_col]
+                    ])
+                else:
+                    self.dataset.append([
+                        [os.path.join(DataDir,files[i]) for i in from_col],
+                        [os.path.join(DataDir,files[i]) for i in to_col]
+                    ])
                 for i in range(len(files)):
                     if not os.path.isfile(os.path.join(DataDir,files[i])):
                         print("{} not found!".format(os.path.join(DataDir,files[i])))

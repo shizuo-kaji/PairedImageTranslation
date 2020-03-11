@@ -44,8 +44,9 @@ def main():
         from dataset_dicom import Dataset
     else:
         from dataset import Dataset  
-    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random_translate, grey=args.grey)
-    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), random=args.random_translate, grey=args.grey)
+    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
+    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
+    args.crop_height,args.crop_width = train_d.crop
 
     # setup training/validation data iterators
     train_iter = chainer.iterators.SerialIterator(train_d, args.batch_size)
@@ -92,8 +93,8 @@ def main():
         optimizer.setup(model)
         return optimizer
 
-    opt_gen = make_optimizer(gen,args.learning_rate,args.optimizer)
-    opt_dis = make_optimizer(dis,args.learning_rate,args.optimizer)
+    opt_gen = make_optimizer(gen,args.learning_rate_gen,args.optimizer)
+    opt_dis = make_optimizer(dis,args.learning_rate_dis,args.optimizer)
     optimizers = {'opt_g':opt_gen, 'opt_d':opt_dis}
 
     ## resume optimisers from file
@@ -111,9 +112,7 @@ def main():
     updater = pixupdater(
         models=(gen, dis),
         iterator={
-            'main': train_iter,
-            'test': test_iter,
-            'test_gt': test_iter_gt},
+            'main': train_iter},
         optimizer={
             'gen': opt_gen,
             'dis': opt_dis},
@@ -154,7 +153,7 @@ def main():
         trainer.extend(extensions.PlotReport(log_keys_gen, 'iteration', trigger=display_interval, file_name='loss_gen.png'))
         trainer.extend(extensions.PlotReport(log_keys_dis, 'iteration', trigger=display_interval, file_name='loss_dis.png'))
     trainer.extend(extensions.ProgressBar(update_interval=10))
-    trainer.extend(extensions.ParameterStatistics(gen))
+#    trainer.extend(extensions.ParameterStatistics(gen))
     # learning rate scheduling
     if args.optimizer in ['SGD','Momentum','AdaGrad','RMSprop']:
         trainer.extend(extensions.observe_lr(optimizer_name='gen'), trigger=display_interval)

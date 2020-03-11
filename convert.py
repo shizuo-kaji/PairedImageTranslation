@@ -6,18 +6,16 @@
 #############################
 
 import argparse
-import os
-import glob
-import json
-import codecs
+import os,glob
+import json,codecs
 from datetime import datetime as dt
 import time
-import chainer.cuda
-from chainer import serializers, Variable
 import numpy as np
 import net
 import random
+import chainer
 import chainer.functions as F
+from chainer import serializers, Variable, cuda
 from chainercv.utils import write_image
 from chainercv.transforms import resize
 from chainerui.utils import save_args
@@ -31,7 +29,7 @@ if __name__ == '__main__':
     outdir = os.path.join(args.out, dt.now().strftime('out_%m%d_%H%M'))
 
     if args.gpu >= 0:
-        chainer.cuda.get_device_from_id(args.gpu).use()
+        cuda.get_device_from_id(args.gpu).use()
         print('use gpu {}'.format(args.gpu))
 
     ## load arguments from "arg" file used in training
@@ -40,9 +38,8 @@ if __name__ == '__main__':
             larg = json.load(f)
             root=os.path.dirname(args.argfile)
             for x in ['grey',
-              'dis_norm','dis_activation','dis_chs','dis_ksize','dis_sample','dis_down',
-              'gen_norm','gen_activation','gen_out_activation','gen_nblock','gen_chs','gen_sample','gen_down','gen_up','gen_ksize','unet',
-              'gen_fc','gen_fc_activation','spconv','eqconv','dtype']:
+              'gen_norm','gen_activation','gen_out_activation','gen_nblock','gen_chs','gen_sample','gen_down','gen_up','gen_ksize','unet','skipdim','latent_dim',
+              'gen_fc','gen_fc_activation','spconv','eqconv','senet','dtype','btoa']:
                 if x in larg:
                     setattr(args, x, larg[x])
             if not args.model_gen:
@@ -60,9 +57,9 @@ if __name__ == '__main__':
     else:
         from dataset import Dataset  
     if args.val:
-        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey)
+        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey, BtoA=args.btoa)
     elif args.train:
-        dataset = Dataset(args.train, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey)
+        dataset = Dataset(args.train, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey, BtoA=args.btoa)
     else:
         print("Load Dataset from disk: {}".format(args.root))
         with open(os.path.join(args.out,"filenames.txt"),'w') as output:
@@ -80,12 +77,12 @@ if __name__ == '__main__':
 
     ## load generator models
     if args.model_gen:
-            gen = net.Generator(args)
-            print('Loading {:s}..'.format(args.model_gen))
-            serializers.load_npz(args.model_gen, gen)
-            if args.gpu >= 0:
-                gen.to_gpu()
-            xp = gen.xp
+        gen = net.Generator(args)
+        print('Loading {:s}..'.format(args.model_gen))
+        serializers.load_npz(args.model_gen, gen)
+        if args.gpu >= 0:
+            gen.to_gpu()
+        xp = gen.xp
     else:
         print("Specify a learned model.")
         exit()        
@@ -102,11 +99,11 @@ if __name__ == '__main__':
         with chainer.using_config('train', False), chainer.function.no_backprop_mode():
             out_v = gen(imgs)
         if args.gpu >= 0:
-            imgs = xp.asnumpy(imgs.data)
-            out = xp.asnumpy(out_v.data)
+            imgs = xp.asnumpy(imgs.array)
+            out = xp.asnumpy(out_v.array)
         else:
-            imgs = imgs.data
-            out = out_v.data
+            imgs = imgs.array
+            out = out_v.array
         
         ## output images
         for i in range(len(out)):

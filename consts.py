@@ -11,8 +11,8 @@ optim = {
     'Momentum': optimizers.MomentumSGD,
     'AdaDelta': optimizers.AdaDelta,
     'AdaGrad': optimizers.AdaGrad,
-    'Adam': functools.partial(optimizers.Adam, beta1=0.5),
-    'AdaBound': functools.partial(optimizers.Adam, beta1=0.5, adabound=True),
+    'Adam': functools.partial(optimizers.Adam, beta1=0.1),
+    'AdaBound': functools.partial(optimizers.Adam, beta1=0.1, adabound=True),
     'RMSprop': optimizers.RMSprop,
     'NesterovAG': optimizers.NesterovAG,
 }
@@ -39,8 +39,6 @@ activation_func = {
     'none': None,
 }
 
-downlayer = ['down','maxpool','maxpool_res','avgpool','avgpool_res','none']
-uplayer = ['unpool','unpool_res','deconv','pixsh','resize','resize_res','none']
 unettype = ['none','concat','add','conv']
 
 def feature_vector_normalization(x, eps=1e-8):
@@ -48,15 +46,17 @@ def feature_vector_normalization(x, eps=1e-8):
     return F.broadcast_to(alpha, x.data.shape) * x
 
 norm_layer = {
-    'batch': functools.partial(L.BatchNormalization, use_gamma=False, use_beta=False),
+    'none': lambda x: F.identity,
+    'batch': functools.partial(L.BatchNormalization, use_gamma=False, use_beta=True),
     'batch_aff': functools.partial(L.BatchNormalization, use_gamma=True, use_beta=True),
     'layer': L.LayerNormalization,
-    'rbatch': functools.partial(L.BatchRenormalization, use_gamma=False, use_beta=False),
+    'rbatch': functools.partial(L.BatchRenormalization, use_gamma=False, use_beta=True),
 #        functools.partial(L.GroupNormalization, 1)   ## currently very slow
     'fnorm': feature_vector_normalization
 }
 try:
     from instance_normalization import InstanceNormalization
     norm_layer['instance'] = functools.partial(InstanceNormalization, use_gamma=False, use_beta=False)
+    norm_layer['instance_aff'] = functools.partial(InstanceNormalization, use_gamma=True, use_beta=False)
 except:
     pass

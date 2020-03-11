@@ -3,31 +3,20 @@
 # implementation of pix2pix
 # By Shizuo Kaji
 
-import argparse
 import os
-
 import numpy as np
-from PIL import Image
-
 import chainer
-import chainer.cuda
 from chainer import Variable
 import chainer.functions as F
 from chainer.training import extensions
-from chainer import reporter as reporter_module
-
-import net
-
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-
+import warnings
 
 def postprocess(var):
     img = var.data.get()
     img = (img + 1.0) / 2.0  # [0, 1)
     img = img.transpose(0, 2, 3, 1)
-    if img.shape[3]!=3:
-        img=img[:,:,:,-1]
     return img
 
 class VisEvaluator(extensions.Evaluator):
@@ -37,6 +26,7 @@ class VisEvaluator(extensions.Evaluator):
         super(VisEvaluator, self).__init__(*args, **kwargs)
         self.vis_out = params['vis_out']
         self.count = 0
+        warnings.filterwarnings("ignore", category=UserWarning)
 
     def evaluate(self):
         if self.eval_hook:
@@ -61,7 +51,10 @@ class VisEvaluator(extensions.Evaluator):
                 imgs = postprocess(var)
                 for j in range(len(imgs)):
                     ax = fig.add_subplot(gs[j+k*len(batch),i])
-                    ax.imshow(imgs[j], interpolation='none',cmap='gray',vmin=0,vmax=1)
+                    if(imgs[j].shape[2] == 3):
+                        ax.imshow(imgs[j], interpolation='none',vmin=0,vmax=1)
+                    else:
+                        ax.imshow(imgs[j][:,:,-1], interpolation='none',cmap='gray',vmin=0,vmax=1)
                     ax.set_xticks([])
                     ax.set_yticks([])
 

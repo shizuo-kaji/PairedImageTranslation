@@ -26,7 +26,7 @@ with some improvements.
 
 Look at out paper 
 "Overview of image-to-image translation using deep neural networks: denoising, super-resolution, modality-conversion, and reconstruction in medical imaging"
-by Shizuo Kaji and Satoshi Kida
+by Shizuo Kaji and Satoshi Kida, Radiological Physics and Technology,  Volume 12, Issue 3 (2019), pp 235--248,
 [arXiv:1905.08603](https://arxiv.org/abs/1905.08603)
 
 
@@ -45,9 +45,12 @@ pip install pydicom
 ## Licence
 MIT Licence
 
-## Training
-- First, prepare input-output paired images (x_1,y_1), (x_2,y_2), (x_3,y_3),...
+## Data preparation
+
+We need input-output paired images (x_1,y_1), (x_2,y_2), (x_3,y_3),...
 so that the input image x_i is spatially aligned with the output image y_i.
+
+### Method 1: pairs specified by a text file
 - Make a text file "ct_reconst_train.txt" consisting of:
 ```
 filename of x_1     filename of y_1
@@ -56,9 +59,22 @@ filename of x_2     filename of y_2
 ```
 The columns are separated by a tab.
 - Make another text file "ct_reconst_val.txt" for validation.
+
+### Method 2: pairs specified by file names
+- Alternatively, create four directories named "trainA", "trainB", "testA", "testB".
+Put x_i in "trainA" and y_i in "trainB" with the same filename.
+They are paired and used for training.
+Files under "testA" and "testB" with the same filenames are paired and used for validation.
+
+## Training
 - An example command-line arguments for training is
 ```python train_cgan.py -t ct_reconst_train.txt --val ct_reconst_val.txt -R radon -o result  -cw 128 -ch 128 --grey -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3```
 which learns translation of images in ct_reconst_train.txt placed under "radon/" and outputs the result under "result/". 
+
+Alternatively,
+```python train_cgan.py -R images -o result  -cw 128 -ch 128 --grey -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3 --btoa```
+learns translation of images from "images/trainB" to "images/trainA" (note that --btoa means translation in the opposite way from B to A).
+
 The images are cropped to 128 x 128 (-cw 128 -ch 128) and converted to greyscale (--grey).
 Train the model with GPU (-g 0) and 200 epochs (-e 200).
 Use the network with 1 FC layer (-gfc 1) at the beginning (as in AUTOMAP) without UNet-like skip connections (-u none).

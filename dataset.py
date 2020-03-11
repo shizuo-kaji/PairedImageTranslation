@@ -4,7 +4,7 @@ import numpy
 from PIL import Image
 import six
 import numpy as np
-import os
+import os,glob
 import random
 
 from chainer.dataset import dataset_mixin
@@ -18,6 +18,10 @@ def stack_imgs(fns,crop,resize=False,grey=False):
         # image can be given as csv or jpg/png... etc
         if ext==".csv":
             img_in = np.loadtxt(fn, delimiter=",")[np.newaxis,]
+        elif ext==".npy":
+            img_in = (np.load(fn)[np.newaxis,]).astype(np.float32)
+            img_in = (np.sqrt(np.clip(img_in,0,100)))/10.0  ## nasty preprocess
+#            img_in = (img_in - np.mean(img_in))/2*np.std(img_in) # standardize
         else:
             img_in = read_image(fn, color=not grey)/127.5 -1.0
         # resize if the image is too small
@@ -34,28 +38,48 @@ def stack_imgs(fns,crop,resize=False,grey=False):
 
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), random=False, grey=False):
+    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), imgtype='jpg', random=False, grey=False, BtoA=False):
         self.dataset = []
-        ## an input/output image can consist of multiple images; they are stacked as channels
-        with open(datalist) as input:
-            for line in input:
-                files = line.strip().split('\t')
-                if(len(files)<len(set(from_col).union(set(to_col)))):
-                    print("Error in reading data file: ",files)
-                    exit()
-                self.dataset.append([
-                    [os.path.join(DataDir,files[i]) for i in from_col],
-                    [os.path.join(DataDir,files[i]) for i in to_col]
-                ])
-                for i in range(len(files)):
-                    if not os.path.isfile(os.path.join(DataDir,files[i])):
-                        print("{} not found!".format(os.path.join(DataDir,files[i])))
-                        exit()
-        if not crop[0] or crop[1]:
-            img = read_image(self.dataset[i][0][0])
-            self.crop = ( 16*((img.shape[1]-random)//16), 16*((img.shape[2]-random)//16) )
+        if datalist == '__train__':
+            for fn in glob.glob(os.path.join(DataDir,"trainA/*.{}".format(imgtype))):
+                fn2 = fn.replace('trainA','trainB')
+                if BtoA:
+                    self.dataset.append([[fn2],[fn]])
+                else:
+                    self.dataset.append([[fn],[fn2]])
+        elif datalist == '__test__':
+            for fn in glob.glob(os.path.join(DataDir,"testA/*.{}".format(imgtype))):
+                fn2 = fn.replace('testA','testB')
+                if BtoA:
+                    self.dataset.append([[fn2],[fn]])
+                else:
+                    self.dataset.append([[fn],[fn2]])
         else:
-            self.crop = crop
+            ## an input/output image can consist of multiple images; they are stacked as channels
+            with open(datalist) as input:
+                for line in input:
+                    files = line.strip().split('\t')
+                    if(len(files))<2:
+                        continue
+                    if(len(files)<len(set(from_col).union(set(to_col)))):
+                        print("Error in reading data file: ",files)
+                        exit()
+                    if BtoA:
+                        self.dataset.append([
+                            [os.path.join(DataDir,files[i]) for i in to_col],
+                            [os.path.join(DataDir,files[i]) for i in from_col]
+                        ])
+                    else:
+                        self.dataset.append([
+                            [os.path.join(DataDir,files[i]) for i in to_col],
+                            [os.path.join(DataDir,files[i]) for i in from_col]
+                        ])
+                    for i in set(from_col).union(set(to_col)):
+                        if not os.path.isfile(os.path.join(DataDir,files[i])):
+                            print("{} not found!".format(os.path.join(DataDir,files[i])))
+                            exit()
+
+        self.crop = crop
         self.grey = grey
         self.random = random
         print("Cropped size: ",self.crop)
@@ -74,21 +98,23 @@ class Dataset(dataset_mixin.DatasetMixin):
         il,ol = self.dataset[i]
         imgs_in = stack_imgs(il,self.crop, grey=self.grey)
         imgs_out = stack_imgs(ol,self.crop, grey=self.grey)
-        H, W = self.crop
+#        print(np.min(imgs_in),np.max(imgs_in))
+        H = self.crop[0] if self.crop[0] else 16*((imgs_in.shape[1]-2*self.random)//16)
+        W = self.crop[1] if self.crop[1] else 16*((imgs_in.shape[2]-2*self.random)//16)
         if self.random: # random crop/flip
             if random.choice([True, False]):
                 imgs_in = imgs_in[:, :, ::-1]
                 imgs_out = imgs_out[:, :, ::-1]
-            if random.choice([True, False]):
-                imgs_in = imgs_in[:, ::-1, :]
-                imgs_out = imgs_out[:, ::-1, :]
-            y_offset = random.randint((imgs_in.shape[1]-H)//2-self.random, max(imgs_in.shape[1] - H,0))
+#            if random.choice([True, False]):
+#                imgs_in = imgs_in[:, ::-1, :]
+#                imgs_out = imgs_out[:, ::-1, :]
+            y_offset = random.randint((imgs_in.shape[1]-H)//2-self.random, (imgs_in.shape[1]-H)//2+self.random)
             y_slice = slice(y_offset, y_offset + H)
-            x_offset = random.randint((imgs_in.shape[2]-W)//2-self.random, max(imgs_in.shape[2] - W,0))
-            x_slice = slice(x_offset, x_offset + W)                
+            x_offset = random.randint((imgs_in.shape[2]-W)//2-self.random, (imgs_in.shape[2]-W)//2+self.random)
+            x_slice = slice(x_offset, x_offset + W)
         else: # centre crop
-            y_offset = int(round((imgs_in.shape[1] - H) / 2.))
-            x_offset = int(round((imgs_in.shape[2] - W) / 2.))
+            y_offset = (imgs_in.shape[1] - H) // 2
+            x_offset = (imgs_in.shape[2] - W) // 2
             y_slice = slice(y_offset, y_offset + H)
             x_slice = slice(x_offset, x_offset + W)
         return imgs_in[:,y_slice,x_slice], imgs_out[:,y_slice,x_slice]

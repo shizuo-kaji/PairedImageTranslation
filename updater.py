@@ -47,7 +47,6 @@ class ImagePool():
         return return_images
 
 class pixupdater(chainer.training.StandardUpdater):
-
     def __init__(self, *args, **kwargs):
         self.gen, self.dis = kwargs.pop('models')
         params = kwargs.pop('params')
@@ -87,18 +86,6 @@ class pixupdater(chainer.training.StandardUpdater):
         dy = x[:, :, :, 1:] - x[:, :, :, :-1]
         return F.average(F.absolute(dx))+F.average(F.absolute(dy))
 
-    def loss_avg(self, x,y, ksize=3, norm='l2'):
-        if ksize>1:
-            ax = F.average_pooling_2d(x,ksize,1,0)
-            ay = F.average_pooling_2d(y,ksize,1,0)
-        else:
-            ax = x
-            ay = y
-        if norm=='l1':
-            return F.mean_absolute_error(ax,ay)
-        else:
-            return F.mean_squared_error(ax,ay)
-
     def update_core(self):        
         gen_optimizer = self.get_optimizer('gen')
         dis_optimizer = self.get_optimizer('dis')
@@ -110,18 +97,16 @@ class pixupdater(chainer.training.StandardUpdater):
         x_in = Variable(x_in)
         t_out = Variable(t_out)
         x_out = gen(add_noise(x_in, sigma=self.args.noise))
-        x_in_out_copy = Variable(self._buffer.query(F.concat([x_in,x_out]).data))
+        x_in_out = F.concat([x_in,x_out])
 
         loss_gen=0
         # reconstruction error
         if self.args.lambda_rec_l1>0:
-#            loss_rec_l1 = F.mean_absolute_error(x_out, t_out)
-            loss_rec_l1 = self.loss_avg(x_out, t_out, ksize=self.args.loss_ksize, norm='l1')
+            loss_rec_l1 = F.mean_absolute_error(x_out, t_out)
             loss_gen = loss_gen + self.args.lambda_rec_l1*loss_rec_l1       
             chainer.report({'loss_L1': loss_rec_l1}, gen)
         if self.args.lambda_rec_l2>0:
-#            loss_rec_l2 = F.mean_squared_error(x_out, t_out)
-            loss_rec_l2 = self.loss_avg(x_out, t_out, ksize=self.args.loss_ksize, norm='l2')
+            loss_rec_l2 = F.mean_squared_error(x_out, t_out)
             loss_gen = loss_gen + self.args.lambda_rec_l2*loss_rec_l2
             chainer.report({'loss_L2': loss_rec_l2}, gen)
         # total variation
@@ -132,7 +117,7 @@ class pixupdater(chainer.training.StandardUpdater):
  
         # Adversarial loss
         if self.args.lambda_dis>0:
-            y_fake = dis(F.concat([x_in, x_out]))
+            y_fake = dis(x_in_out)
             #batchsize,_,w,h = y_fake.data.shape
             #loss_dis = F.sum(F.softplus(-y_fake)) / batchsize / w / h
             loss_adv = self.loss_func_comp(y_fake,1.0,self.args.dis_jitter)
@@ -146,6 +131,7 @@ class pixupdater(chainer.training.StandardUpdater):
 
         ## discriminator
         if self.args.lambda_dis>0:
+            x_in_out_copy = self._buffer.query(x_in_out.array)
             loss_real = self.loss_func_comp(dis(F.concat([x_in, t_out])),1.0,self.args.dis_jitter)
             loss_fake = self.loss_func_comp(dis(x_in_out_copy),0.0,self.args.dis_jitter)
             chainer.report({'loss_fake': loss_fake}, dis)
