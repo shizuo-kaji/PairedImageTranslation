@@ -18,7 +18,7 @@ optim = {
 }
 try:
     from eve import Eve
-    optim['Eve'] = functools.partial(Eve, beta1=0.5)
+    optim['Eve'] = functools.partial(Eve, beta1=0.1)
 except:
     pass
 try:
@@ -36,6 +36,7 @@ activation_func = {
     'relu': F.relu,
     'lrelu': lambda x: F.leaky_relu(x, slope=0.2),
     'tanh': F.tanh,
+    'sigmoid': F.sigmoid,
     'none': None,
 }
 
@@ -52,7 +53,7 @@ norm_layer = {
     'layer': L.LayerNormalization,
     'rbatch': functools.partial(L.BatchRenormalization, use_gamma=False, use_beta=True),
 #        functools.partial(L.GroupNormalization, 1)   ## currently very slow
-    'fnorm': feature_vector_normalization
+    'fnorm': lambda x: feature_vector_normalization
 }
 try:
     from instance_normalization import InstanceNormalization

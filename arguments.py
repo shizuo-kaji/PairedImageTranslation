@@ -32,10 +32,12 @@ def arguments():
 
     parser.add_argument('--snapinterval', '-si', type=int, default=-1, 
                         help='take snapshot every this epoch')
-    parser.add_argument('--display_interval', type=int, default=500,
+    parser.add_argument('--display_interval', type=int, default=100,
                         help='Interval of displaying log to console')
     parser.add_argument('--nvis', type=int, default=3,
                         help='number of images in visualisation after each epoch')
+    parser.add_argument('--vis_freq', '-vf', type=int, default=None,
+                        help='visualisation frequency in iteration')
 
     parser.add_argument('--crop_width', '-cw', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
     parser.add_argument('--crop_height', '-ch', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
@@ -46,6 +48,8 @@ def arguments():
     parser.add_argument('--lambda_dis', '-ldis', type=float, default=1.0, help='weight for adversarial loss')
     parser.add_argument('--lambda_tv', '-ltv', type=float, default=0.0, help='weight for total variation')
     parser.add_argument('--lambda_mispair', '-lm', type=float, default=0, help='weight for discriminator rejecting mis-matched (real,real) pairs')
+    parser.add_argument('--lambda_wgan_gp', '-lwgp', type=float, default=10,
+                        help='lambda for the gradient penalty for WGAN')
     parser.add_argument('--tv_tau', '-tt', type=float, default=1e-3,
                         help='smoothing parameter for total variation')
     parser.add_argument('--loss_ksize', '-lk', type=int, default=1,
@@ -60,8 +64,6 @@ def arguments():
                         help='weight decay for regularization')
     parser.add_argument('--weight_decay_norm', '-wn', choices=['l1','l2'], default='l2',
                         help='norm of weight decay for regularization')
-    parser.add_argument('--vis_freq', '-vf', type=int, default=None,
-                        help='visualisation frequency in iteration')
 
     parser.add_argument('--dtype', '-dt', choices=dtypes.keys(), default='fp32',
                         help='floating point precision')
@@ -81,6 +83,7 @@ def arguments():
 
     # discriminator
     parser.add_argument('--dis_activation', '-da', default='lrelu', choices=activation_func.keys())
+    parser.add_argument('--dis_out_activation', '-do', default='none', choices=activation_func.keys())
     parser.add_argument('--dis_ksize', '-dk', type=int, default=4,    # default 4
                         help='kernel size for patchGAN discriminator')
     parser.add_argument('--dis_chs', '-dc', type=int, nargs="*", default=None,
@@ -101,7 +104,7 @@ def arguments():
                         choices=norm_layer)
     parser.add_argument('--dis_reg_weighting', '-dw', type=float, default=0,
                         help='regularisation of weighted discriminator. Set 0 to disable weighting')
-    parser.add_argument('--dis_wgan', action='store_true',help='WGAN-GP')
+    parser.add_argument('--dis_wgan', '-wgan', action='store_true',help='WGAN-GP')
     parser.add_argument('--dis_attention', action='store_true',help='attention mechanism for discriminator')
 
     # generator
@@ -137,13 +140,14 @@ def arguments():
 
     args = parser.parse_args()
     args.out = os.path.join(args.out, dt.now().strftime('%m%d_%H%M')+"_cgan")
-    args.wgan=False
 
     if not args.gen_chs:
         args.gen_chs = [int(args.gen_basech) * (2**i) for i in range(args.gen_ndown)]
     if not args.dis_chs:
         args.dis_chs = [int(args.dis_basech) * (2**i) for i in range(args.dis_ndown)]
-
+    if args.gen_fc>0 and args.crop_width is None:
+        print("Specify crop_width and crop_height!")
+        exit()
     save_args(args, args.out)
     print(args)
     print("\nresults are saved under: ",args.out)

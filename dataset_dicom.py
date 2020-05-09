@@ -22,23 +22,39 @@ class Dataset(dataset_mixin.DatasetMixin):
         self.random = random # random crop/flip for data augmentation
         self.dtype = np.float32
         ## an input/output image can consist of multiple images; they are stacked as channels
-        with open(datalist) as input:
-            for line in input:
-                files = line.strip().split('\t')
+        if datalist == '__train__':
+            for fn in glob.glob(os.path.join(DataDir,"trainA/*.{}".format(imgtype))):
+                fn2 = fn.replace('trainA','trainB')
                 if BtoA:
-                    self.dataset.append([
-                        [os.path.join(DataDir,files[i]) for i in to_col],
-                        [os.path.join(DataDir,files[i]) for i in from_col]
-                    ])
+                    self.dataset.append([[fn2],[fn]])
                 else:
-                    self.dataset.append([
-                        [os.path.join(DataDir,files[i]) for i in from_col],
-                        [os.path.join(DataDir,files[i]) for i in to_col]
-                    ])
-                for i in range(len(files)):
-                    if not os.path.isfile(os.path.join(DataDir,files[i])):
-                        print("{} not found!".format(os.path.join(DataDir,files[i])))
-                        exit()
+                    self.dataset.append([[fn],[fn2]])
+        elif datalist == '__test__':
+            for fn in glob.glob(os.path.join(DataDir,"testA/*.{}".format(imgtype))):
+                fn2 = fn.replace('testA','testB')
+                if BtoA:
+                    self.dataset.append([[fn2],[fn]])
+                else:
+                    self.dataset.append([[fn],[fn2]])
+        else:
+            with open(datalist) as input:
+                for line in input:
+                    files = line.strip().split('\t')
+                    if BtoA:
+                        self.dataset.append([
+                            [os.path.join(DataDir,files[i]) for i in to_col],
+                            [os.path.join(DataDir,files[i]) for i in from_col]
+                        ])
+                    else:
+                        self.dataset.append([
+                            [os.path.join(DataDir,files[i]) for i in from_col],
+                            [os.path.join(DataDir,files[i]) for i in to_col]
+                        ])
+                    for i in range(len(files)):
+                        if not os.path.isfile(os.path.join(DataDir,files[i])):
+                            print("{} not found!".format(os.path.join(DataDir,files[i])))
+                            exit()
+                            
         print("loaded {} images".format(len(self.dataset)))
     
     def __len__(self):

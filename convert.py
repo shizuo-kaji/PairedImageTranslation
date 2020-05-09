@@ -56,16 +56,17 @@ if __name__ == '__main__':
         from dataset_dicom import Dataset
     else:
         from dataset import Dataset  
-    if args.val:
-        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey, BtoA=args.btoa)
-    elif args.train:
-        dataset = Dataset(args.train, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey, BtoA=args.btoa)
-    else:
+    if args.val=="__test__":
         print("Load Dataset from disk: {}".format(args.root))
         with open(os.path.join(args.out,"filenames.txt"),'w') as output:
             for file in glob.glob(os.path.join(args.root,"**/*.{}".format(args.imgtype)), recursive=True):
                 output.write('{}\n'.format(file))
         dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], crop=(args.crop_height,args.crop_width), random=False, grey=args.grey)
+    elif args.val:
+        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey, BtoA=args.btoa)
+    else:
+        print("Specify file or dir!")
+        exit
         
 #    iterator = chainer.iterators.MultiprocessIterator(dataset, args.batch_size, n_processes=3, repeat=False, shuffle=False)
     iterator = chainer.iterators.MultithreadIterator(dataset, args.batch_size, n_threads=3, repeat=False, shuffle=False)   ## best performance
@@ -109,15 +110,23 @@ if __name__ == '__main__':
         for i in range(len(out)):
             fn = dataset.get_img_path(cnt)
             print("\nProcessing {}".format(fn))
-            new = dataset.var2img(out[i]) 
+            new = dataset.var2img(out[i])
             print("raw value: {} {}".format(np.min(out[i]),np.max(out[i])))
-            path = os.path.join(outdir,os.path.basename(fn))
+            print("image value: {} {}".format(np.min(new),np.max(new)))
+            bfn,ext = os.path.splitext(fn)
             # converted image
             if args.imgtype=="dcm":
+                path = os.path.join(outdir,os.path.basename(fn))
                 ref_dicom = dataset.overwrite(new[0],fn,salt)
                 ref_dicom.save_as(path)
-            else:
-                write_image(new, path)
+            elif args.imgtype=="npy":
+                path = os.path.join(outdir,os.path.basename(bfn))
+                np.save(path,new[0])
+#                path = os.path.join(outdir,os.path.basename(bfn))+".txt"
+#                np.savetxt(path,new[0],fmt="%d")
+            # save image as well
+            path = os.path.join(outdir,os.path.basename(bfn))+".jpg"
+            write_image(new, path)
 
             cnt += 1
         ####

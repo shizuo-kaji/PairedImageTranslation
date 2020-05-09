@@ -4,9 +4,13 @@ import chainer
 import chainer.functions as F
 import chainer.links as L
 import numpy as np
-from sn import SNConvolution2D,SNLinear
 
 from consts import activation_func, norm_layer
+
+try:
+    from sn import SNConvolution2D,SNLinear
+except:
+    pass
 
 class SEBlock(chainer.Chain):
     def __init__(self,ch,r=16):
@@ -235,12 +239,13 @@ class LBR(chainer.Chain):
         nobias = False
         self.dropout = dropout
         with self.init_scope():
-            self.l0 = L.Linear(None,out_ch, nobias=nobias)
+            self.l0 = L.Linear(None, out_ch, nobias=nobias)
             self.norm = norm_layer[norm](out_ch)
 
     def __call__(self, x):
         h = self.l0(x)
         h = self.norm(h)
+#        print(F.max(h))  # bug? we always get zero if a normalization is applied
         if self.dropout:
             h = F.dropout(h, ratio=self.dropout)
         if self.activation is not None:
@@ -316,10 +321,6 @@ class Decoder(chainer.Chain):
             up_chs = [self.chs[i]+args.skipdim for i in range(len(self.chs))]
         else:    # ['add','none']:
             up_chs = self.chs
-        if hasattr(args,'noise_z'):
-            self.noise_z = args.noise_z
-        else:
-            self.noise_z = 0
         with self.init_scope():
             if hasattr(args,'latent_dim') and args.latent_dim>0:
                 self.latent_c = args.gen_chs[-1]
@@ -339,8 +340,6 @@ class Decoder(chainer.Chain):
             e = h[-1]
         else:
             e = h
-        if chainer.config.train and self.noise_z>0:
-            e.data += self.noise_z * e.xp.random.randn(*e.data.shape, dtype=e.dtype)
         if hasattr(self,'latent_fc'):
             e = F.reshape(self.latent_fc(e),(-1,self.latent_c,self.latent_h,self.latent_w))
         for i in range(self.n_resblock):
@@ -358,11 +357,18 @@ class Decoder(chainer.Chain):
 class Generator(chainer.Chain):
     def __init__(self, args):
         super(Generator, self).__init__()
+        if hasattr(args,'noise_z'):
+            self.noise_z = args.noise_z
+        else:
+            self.noise_z = 0
         with self.init_scope():
             self.encoder = Encoder(args)
             self.decoder = Decoder(args)
     def __call__(self, x):
-        return self.decoder(self.encoder(x))
+        h = self.encoder(x)
+        if chainer.config.train and self.noise_z>0:
+            h.data += self.noise_z * h.xp.random.randn(*h.data.shape, dtype=h.dtype)
+        return self.decoder(h)
 
 class Discriminator(chainer.Chain):
     def __init__(self, args):
@@ -384,7 +390,7 @@ class Discriminator(chainer.Chain):
             if self.attention:
                 setattr(self, 'a',  NonLocalBlock(2*self.chs[-1]))
             if self.wgan:
-                self.fc1 = L.Linear(None, 1024)
+                self.fc1 = LBR(1024, activation='relu')
                 self.fc2 = L.Linear(None, 1)
             else:
                 self.cl = CBR(2*self.chs[-1], dis_out, ksize=args.dis_ksize, norm='none', sample='none', activation='none', dropout=False, equalised=args.eqconv, separable=args.spconv, senet=args.senet)
@@ -397,8 +403,8 @@ class Discriminator(chainer.Chain):
         if self.attention:
             h = getattr(self, 'a')(h)
         if self.wgan:
-            h = F.average(h, axis=(2, 3))  # Global pooling
-            h = activation_func[self.activation](self.fc1(h))
+#            h = F.average(h, axis=(2, 3))   # global pooling
+            h = self.fc1(h)
             h = self.fc2(h)
         else:
             h = self.cl(h)

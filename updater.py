@@ -118,9 +118,12 @@ class pixupdater(chainer.training.StandardUpdater):
         # Adversarial loss
         if self.args.lambda_dis>0:
             y_fake = dis(x_in_out)
-            #batchsize,_,w,h = y_fake.data.shape
-            #loss_dis = F.sum(F.softplus(-y_fake)) / batchsize / w / h
-            loss_adv = self.loss_func_comp(y_fake,1.0,self.args.dis_jitter)
+            if self.args.dis_wgan:
+                loss_adv = -F.average(y_fake)
+            else:
+                #batchsize,_,w,h = y_fake.data.shape
+                #loss_dis = F.sum(F.softplus(-y_fake)) / batchsize / w / h
+                loss_adv = self.loss_func_comp(y_fake,1.0,self.args.dis_jitter)
             chainer.report({'loss_dis': loss_adv}, gen)
             loss_gen = loss_gen + self.args.lambda_dis * loss_adv
 
@@ -132,19 +135,33 @@ class pixupdater(chainer.training.StandardUpdater):
         ## discriminator
         if self.args.lambda_dis>0:
             x_in_out_copy = self._buffer.query(x_in_out.array)
-            loss_real = self.loss_func_comp(dis(F.concat([x_in, t_out])),1.0,self.args.dis_jitter)
-            loss_fake = self.loss_func_comp(dis(x_in_out_copy),0.0,self.args.dis_jitter)
+            if self.args.dis_wgan: ## synthesised -, real +
+                eps = self.xp.random.uniform(0, 1, size=len(batch)).astype(self.xp.float32)[:, None, None, None]
+                loss_real = -F.average(dis(F.concat([x_in, t_out])))
+                loss_fake = F.average(dis(x_in_out_copy))
+                y_mid = eps * x_in_out + (1.0 - eps) * x_in_out_copy
+                # gradient penalty
+                gd, = chainer.grad([dis(y_mid)], [y_mid], enable_double_backprop=True)
+                gd = F.sqrt(F.batch_l2_norm_squared(gd) + 1e-6)
+                loss_dis_gp = F.mean_squared_error(gd, self.xp.ones_like(gd.data))                
+                chainer.report({'loss_gp': self.args.lambda_wgan_gp * loss_dis_gp}, dis)
+                loss_dis = (loss_fake + loss_real) * 0.5 + self.args.lambda_wgan_gp * loss_dis_gp
+            else:
+                loss_real = self.loss_func_comp(dis(F.concat([x_in, t_out])),1.0,self.args.dis_jitter)
+                loss_fake = self.loss_func_comp(dis(x_in_out_copy),0.0,self.args.dis_jitter)
+                ## mis-matched input-output pair should be discriminated as fake
+                if self._buffer.num_imgs > 40 and self.args.lambda_mispair>0:
+                    f_in = self.gen.xp.concatenate(random.sample(self._buffer.images, len(x_in)))
+                    f_in = Variable(f_in[:,:x_in.shape[1],:,:])
+                    loss_mispair = self.loss_func_comp(dis(F.concat([f_in,t_out])),0.0,self.args.dis_jitter)
+                    chainer.report({'loss_mispair': loss_mispair}, dis)
+                else:
+                    loss_mispair = 0
+                loss_dis = 0.5*(loss_fake + loss_real) + self.args.lambda_mispair * loss_mispair
+
+            # common for discriminator
             chainer.report({'loss_fake': loss_fake}, dis)
             chainer.report({'loss_real': loss_real}, dis)
-            ## mis-matched input-output pair should be discriminated as fake
-            if self._buffer.num_imgs > 40 and self.args.lambda_mispair>0:
-                f_in = self.gen.xp.concatenate(random.sample(self._buffer.images, len(x_in)))
-                f_in = Variable(f_in[:,:x_in.shape[1],:,:])
-                loss_mispair = self.loss_func_comp(dis(F.concat([f_in,t_out])),0.0,self.args.dis_jitter)
-                chainer.report({'loss_mispair': loss_mispair}, dis)
-            else:
-                loss_mispair = 0
-            loss_dis = 0.5*(loss_fake + loss_real) + self.args.lambda_mispair * loss_mispair
             dis.cleargrads()
             loss_dis.backward()
             dis_optimizer.update(loss=loss_dis)

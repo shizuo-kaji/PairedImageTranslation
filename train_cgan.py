@@ -23,7 +23,6 @@ from chainer.dataset import convert
 import net
 from updater import pixupdater
 from arguments import arguments 
-
 from dataset import Dataset
 from visualizer import VisEvaluator
 from consts import dtypes,optim
@@ -82,6 +81,7 @@ def main():
     def make_optimizer(model, lr, opttype='Adam'):
 #        eps = 1e-5 if args.dtype==np.float16 else 1e-8
         optimizer = optim[opttype](lr)
+        optimizer.setup(model)
         if args.weight_decay>0:
             if opttype in ['Adam','AdaBound','Eve']:
                 optimizer.weight_decay_rate = args.weight_decay
@@ -90,7 +90,6 @@ def main():
                     optimizer.add_hook(chainer.optimizer.WeightDecay(args.weight_decay))
                 else:
                     optimizer.add_hook(chainer.optimizer_hooks.Lasso(args.weight_decay))
-        optimizer.setup(model)
         return optimizer
 
     opt_gen = make_optimizer(gen,args.learning_rate_gen,args.optimizer)
@@ -146,7 +145,11 @@ def main():
     ## log outputs
     log_keys = ['epoch', 'iteration','lr']
     log_keys_gen = ['gen/loss_L1', 'gen/loss_L2', 'gen/loss_dis', 'myval/loss_L2', 'gen/loss_tv']
-    log_keys_dis = ['dis/loss_real','dis/loss_fake','dis/loss_mispair']
+    log_keys_dis = []
+    if args.lambda_dis>0:
+        log_keys_dis.extend(['dis/loss_real','dis/loss_fake','dis/loss_mispair'])
+    if args.dis_wgan:
+        log_keys_dis.extend(['dis/loss_gp'])
     trainer.extend(extensions.LogReport(trigger=display_interval))
     trainer.extend(extensions.PrintReport(log_keys+log_keys_gen+log_keys_dis), trigger=display_interval)
     if extensions.PlotReport.available():

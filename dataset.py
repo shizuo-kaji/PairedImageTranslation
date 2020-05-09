@@ -18,9 +18,11 @@ def stack_imgs(fns,crop,resize=False,grey=False):
         # image can be given as csv or jpg/png... etc
         if ext==".csv":
             img_in = np.loadtxt(fn, delimiter=",")[np.newaxis,]
+        elif ext==".txt":
+            img_in = np.loadtxt(fn)[np.newaxis,]
         elif ext==".npy":
             img_in = (np.load(fn)[np.newaxis,]).astype(np.float32)
-            img_in = (np.sqrt(np.clip(img_in,0,100)))/10.0  ## nasty preprocess
+#            img_in = (np.sqrt(np.clip(img_in,0,100)))/10.0  ## nasty preprocess
 #            img_in = (img_in - np.mean(img_in))/2*np.std(img_in) # standardize
         else:
             img_in = read_image(fn, color=not grey)/127.5 -1.0
@@ -60,7 +62,10 @@ class Dataset(dataset_mixin.DatasetMixin):
                 for line in input:
                     files = line.strip().split('\t')
                     if(len(files))<2:
-                        continue
+                        self.dataset.append([
+                            [os.path.join(DataDir,files[0])],
+                            [os.path.join(DataDir,files[0])]
+                        ])
                     if(len(files)<len(set(from_col).union(set(to_col)))):
                         print("Error in reading data file: ",files)
                         exit()
