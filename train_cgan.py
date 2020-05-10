@@ -27,6 +27,9 @@ from dataset import Dataset
 from visualizer import VisEvaluator
 from consts import dtypes,optim
 
+def plot_log(f,a,summary):
+    a.set_yscale('log')
+
 def main():
     args = arguments()
 
@@ -144,7 +147,7 @@ def main():
 
     ## log outputs
     log_keys = ['epoch', 'iteration','lr']
-    log_keys_gen = ['gen/loss_L1', 'gen/loss_L2', 'gen/loss_dis', 'myval/loss_L2', 'gen/loss_tv']
+    log_keys_gen = ['gen/loss_L1', 'gen/loss_L2', 'gen/loss_dis', 'myval/loss_L1', 'myval/loss_L2', 'gen/loss_tv']
     log_keys_dis = []
     if args.lambda_dis>0:
         log_keys_dis.extend(['dis/loss_real','dis/loss_fake','dis/loss_mispair'])
@@ -153,8 +156,8 @@ def main():
     trainer.extend(extensions.LogReport(trigger=display_interval))
     trainer.extend(extensions.PrintReport(log_keys+log_keys_gen+log_keys_dis), trigger=display_interval)
     if extensions.PlotReport.available():
-        trainer.extend(extensions.PlotReport(log_keys_gen, 'iteration', trigger=display_interval, file_name='loss_gen.png'))
-        trainer.extend(extensions.PlotReport(log_keys_dis, 'iteration', trigger=display_interval, file_name='loss_dis.png'))
+        trainer.extend(extensions.PlotReport(log_keys_gen, 'iteration', trigger=display_interval, file_name='loss_gen.png', postprocess=plot_log))
+        trainer.extend(extensions.PlotReport(log_keys_dis, 'iteration', trigger=display_interval, file_name='loss_dis.png', postprocess=plot_log))
     trainer.extend(extensions.ProgressBar(update_interval=10))
 #    trainer.extend(extensions.ParameterStatistics(gen))
     # learning rate scheduling

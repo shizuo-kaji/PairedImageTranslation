@@ -6,16 +6,16 @@ from chainercv.utils import write_image
 import pydicom as dicom
 
 outdir = "out/"
-infn = "*.dcm"
+infn = "*.txt"
 target = "npy"
+HU_base = -1024
+HU_range = 2000
 
 os.makedirs(outdir, exist_ok=True)
 
 def img2var(img):
-    base = -1000
-    rn = 2000
     # cut off mask [-1,1] or [0,1] output
-    return(2*(np.clip(img,base,base+rn)-base)/rn-1.0)
+    return(2*(np.clip(img,HU_base,HU_base+HU_range)-HU_base)/HU_range-1.0)
 
 for file in sorted(glob.glob(infn, recursive=False)):
     print(file)

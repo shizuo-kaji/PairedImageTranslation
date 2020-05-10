@@ -44,8 +44,9 @@ class VisEvaluator(extensions.Evaluator):
             if k==0:
                 fig = plt.figure(figsize=(9, 6 * len(batch)))
                 gs = gridspec.GridSpec(2* len(batch), 3, wspace=0.1, hspace=0.1)
-                loss_rec = F.mean_squared_error(x_out, t_out)
-                result = {"myval/loss_L2": loss_rec}
+                loss_rec_L1 = F.mean_absolute_error(x_out, t_out)
+                loss_rec_L2 = F.mean_squared_error(x_out, t_out)
+                result = {"myval/loss_L1": loss_rec_L1, "myval/loss_L2": loss_rec_L2}
                     
             for i, var in enumerate([x_in, t_out, x_out]):
                 imgs = postprocess(var)

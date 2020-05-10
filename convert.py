@@ -46,7 +46,7 @@ if __name__ == '__main__':
                 if larg["epoch"]:
                     args.model_gen=os.path.join(root,'gen_{}.npz'.format(larg["epoch"]))
                     
-    args.random = False
+    args.random = 0
     save_args(args, outdir)
     print(args)
     chainer.config.dtype = dtypes[args.dtype]
@@ -61,9 +61,9 @@ if __name__ == '__main__':
         with open(os.path.join(args.out,"filenames.txt"),'w') as output:
             for file in glob.glob(os.path.join(args.root,"**/*.{}".format(args.imgtype)), recursive=True):
                 output.write('{}\n'.format(file))
-        dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], crop=(args.crop_height,args.crop_width), random=False, grey=args.grey)
+        dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], crop=(args.crop_height,args.crop_width), random=0, grey=args.grey)
     elif args.val:
-        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=False, grey=args.grey, BtoA=args.btoa)
+        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=0, grey=args.grey, BtoA=args.btoa)
     else:
         print("Specify file or dir!")
         exit

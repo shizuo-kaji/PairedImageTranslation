@@ -10,14 +10,11 @@ from chainercv.transforms import random_crop,center_crop, resize
 from consts import dtypes
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), random=False, grey=True, imgtype='dcm', BtoA=False):
+    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), random=0, grey=True, imgtype='dcm', BtoA=False):
         self.dataset = []
         self.base = -1024
         self.range = 2000
-        if not crop[0]:
-            self.crop = (384,480)  ## default for the CBCT dataset
-        else:
-            self.crop = crop
+        self.crop = crop
         self.grey = True
         self.random = random # random crop/flip for data augmentation
         self.dtype = np.float32
@@ -74,7 +71,8 @@ class Dataset(dataset_mixin.DatasetMixin):
             ref_dicom_out = dicom.read_file(ol[0], force=True)
             ref_dicom_out.file_meta.TransferSyntaxUID = dicom.uid.ImplicitVRLittleEndian
             imgs_out = self.img2var(ref_dicom_out.pixel_array.astype(self.dtype)+ref_dicom_out.RescaleIntercept)[np.newaxis,:,:]
-        H, W = self.crop
+        H = self.crop[0] if self.crop[0] else 16*((imgs_in.shape[1]-2*self.random)//16)
+        W = self.crop[1] if self.crop[1] else 16*((imgs_in.shape[2]-2*self.random)//16)
         if self.random: # random crop/flip
             if random.choice([True, False]):
                 imgs_in = imgs_in[:, :, ::-1]
@@ -105,7 +103,8 @@ class Dataset(dataset_mixin.DatasetMixin):
         dt=ref_dicom.pixel_array.dtype
         img = np.full(ref_dicom.pixel_array.shape, self.base, dtype=np.float32)
         ch,cw = new.shape
-        h,w = self.crop
+        h = self.crop[0] if self.crop[0] else 16*((img.shape[0]-2*self.random)//16)
+        w = self.crop[1] if self.crop[1] else 16*((img.shape[1]-2*self.random)//16)
         if np.min(img - ref_dicom.RescaleIntercept)<0:
             ref_dicom.RescaleIntercept = -1024
         img[np.newaxis,(ch-h)//2:(ch+h)//2,(cw-w)//2:(cw+w)//2] = new
