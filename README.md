@@ -24,16 +24,18 @@ Phillip Isola, Jun-Yan Zhu, Tinghui Zhou, Alexei A. Efros, CVPR, 2017
 
 with some improvements.
 
-Look at out paper 
+The details can be found in our paper:
 "Overview of image-to-image translation using deep neural networks: denoising, super-resolution, modality-conversion, and reconstruction in medical imaging"
 by Shizuo Kaji and Satoshi Kida, Radiological Physics and Technology,  Volume 12, Issue 3 (2019), pp 235--248,
 [arXiv:1905.08603](https://arxiv.org/abs/1905.08603)
+
+If you use this software, please cite the above paper.
 
 
 ### Requirements
 - a modern GPU
 - python 3: [Anaconda](https://anaconda.org) is recommended
-- chainer >= 5.3.0, cupy, chainerui, chainercv: install them by
+- chainer >= 6.5.0, cupy, chainerui, chainercv: install them by
 ```
 pip install cupy,chainer,chainerui,chainercv
 ```
@@ -49,6 +51,7 @@ MIT Licence
 
 We need input-output paired images (x_1,y_1), (x_2,y_2), (x_3,y_3),...
 so that the input image x_i is spatially aligned with the output image y_i.
+In particular, the image sizes should be same.
 
 ### Method 1: pairs specified by a text file
 - Make a text file "ct_reconst_train.txt" consisting of:
@@ -67,12 +70,30 @@ They are paired and used for training.
 Files under "testA" and "testB" with the same filenames are paired and used for validation.
 
 ## Training
-- An example command-line arguments for training is
-```python train_cgan.py -t ct_reconst_train.txt --val ct_reconst_val.txt -R radon -o result  -cw 128 -ch 128 --grey -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3```
+
+### Pixelwise regression (super-resolution, denoising, modality conversion, etc.)
+Typical usage cases should be covered by
+```
+python train_cgan.py -R images -o result -it jpg -g 0 -e 200 -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3
+```
+which learns translation of jpg images from "images/trainA" to "images/trainB" and outputs the result under "result/". 
+By specifying, say **-it dcm**, the code searches for DICOM files instead of jpeg images.
+
+### Non-local pixelwise regression (reconstruction)
+To account for non-local mapping, we use fully-connected (FC) layer before convolution (**-gfc 1**).
+Note that FC layers are very expensive in terms of GPU memory.
+
+An example command-line arguments for training is
+```
+python train_cgan.py -t ct_reconst_train.txt --val ct_reconst_val.txt -R radon -o result  -cw 128 -ch 128 -rt 0 --grey -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3
+```
 which learns translation of images in ct_reconst_train.txt placed under "radon/" and outputs the result under "result/". 
 
 Alternatively,
-```python train_cgan.py -R images -o result  -cw 128 -ch 128 --grey -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3 --btoa```
+```
+python train_cgan.py -R images -o result  -cw 128 -ch 128 --grey -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3 --btoa
+```
+
 learns translation of images from "images/trainB" to "images/trainA" (note that --btoa means translation in the opposite way from B to A).
 
 The images are cropped to 128 x 128 (-cw 128 -ch 128) and converted to greyscale (--grey).
@@ -84,15 +105,26 @@ Crop size may have to be a power of two, if you encounter any error regarding th
 
 During training, it occasionally produces image files under "results/vis" containing original, ground truth, and converted images in each row. 
 
-For a list of command-line arguments,
+### Pixelwise classification (segmentation)
+If the target images encodes classes for each pixel, 
+```
+python train_cgan.py -R segmentation -o result -it dcm -e 200 -l1 0 -l2 0.0 -lce 1 -ldis 0 -cn 4
+```
+where (**-cn 4**) tells that there are four classes which are labeled 0,1,2, and 3.
 
-```python train_cgan.py -h```
+### List of command-line arguments
+For a list of command-line arguments,
+```
+python train_cgan.py -h
+```
+
 
 ## Conversion with a trained model
 ```
 python convert.py -b 10 -a results/args --val ct_reconst_val.txt -R radon -o converted -m results/gen_200.npz
 ```
-converts image files in ct_reconstruct_val.txt using a learnt model "results/gen_200.npz" and outputs the result to "converted/".
+converts image files in ct_reconstruct_val.txt using a learnt model "results/gen_200.npz" with parameters recorded in "results/args" (automatically created during training)
+and outputs the result to "converted/".
 A larger batch size (-b 10) increases the conversion speed but may consume too much memory.
 
 ## Inverse Radon transform demo (reconstruction from sinogram)
@@ -116,6 +148,11 @@ You will get "images/trainA" containing images with noise and "images/trainB" co
 Also, you will get a text file "CPTAC-SAR.txt" containing image file names.
 - Split the dataset into training and validation. Just split the text file into two files.
 Name them "CPTAC-SAR_train.txt" and "CPTAC-SAR_val.txt"
+You can do this by:
+```
+python util/random_split.py dataset/CPTAC-SAR.txt --ratio 0.8 
+```
+
 - Start training by
 ```
 python train_cgan.py -t CPTAC-SAR_train.txt --val CPTAC-SAR_val.txt -it dcm -ch 480 -cw 480 -g 0 -e 50 -gc 32 64 128 -l1 1.0 -l2 0 -ldis 0.1 -ltv 1e-4 -R images -o result -vf 2000

@@ -8,28 +8,40 @@ from chainerui.utils import save_args
 
 def arguments():
     parser = argparse.ArgumentParser(description='chainer implementation of pix2pix')
+    parser.add_argument('--btoa', action='store_true', help='convert in the opposite way (B to A)')
+    parser.add_argument('--argfile', '-a', help="specify args file to read")
+    parser.add_argument('--out', '-o', default='result',
+                        help='Directory to output the result')
+    # input image
+    parser.add_argument('--root', '-R', default='.',
+                        help='directory containing image files')
     parser.add_argument('--train', '-t', default="__train__", help='text file containing image pair filenames for training')
     parser.add_argument('--val', default="__test__", help='text file containing image pair filenames for validation')
-    parser.add_argument('--btoa', action='store_true', help='convert in the opposite way (B to A)')
-    parser.add_argument('--imgtype', '-it', default="jpg", help="image file type (file extension)")
-    parser.add_argument('--argfile', '-a', help="specify args file to read")
     parser.add_argument('--from_col', '-c1', type=int, nargs="*", default=[0],
                         help='column index of FromImage')
     parser.add_argument('--to_col', '-c2', type=int, nargs="*", default=[1],
                         help='column index of ToImage')
+    parser.add_argument('--imgtype', '-it', default="jpg", help="image file type (file extension)")
+    parser.add_argument('--crop_width', '-cw', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
+    parser.add_argument('--crop_height', '-ch', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
+    parser.add_argument('--grey', action='store_true', help='greyscale')
+    parser.add_argument('--class_num', '-cn', type=int,default=0, help='number of classes for pixelwise classification')
+
+    # training
     parser.add_argument('--batch_size', '-b', type=int, default=1,
                         help='Number of images in each mini-batch')
     parser.add_argument('--epoch', '-e', type=int, default=400,
                         help='Number of sweeps over the dataset to train')
     parser.add_argument('--gpu', '-g', type=int, default=0,
                         help='GPU ID (negative value indicates CPU)')
-    parser.add_argument('--out', '-o', default='result',
-                        help='Directory to output the result')
-    parser.add_argument('--root', '-R', default='.',
-                        help='directory containing image files')
     parser.add_argument('--learning_rate_gen', '-lrg', type=float, default=2e-4)
     parser.add_argument('--learning_rate_dis', '-lrd', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', '-wd', type=float, default=1e-8,  #default:  1e-7
+                        help='weight decay for regularization')
+    parser.add_argument('--weight_decay_norm', '-wn', choices=['l1','l2'], default='l2',
+                        help='norm of weight decay for regularization')
 
+    # snapshot and evaluation
     parser.add_argument('--snapinterval', '-si', type=int, default=-1, 
                         help='take snapshot every this epoch')
     parser.add_argument('--display_interval', type=int, default=100,
@@ -39,12 +51,10 @@ def arguments():
     parser.add_argument('--vis_freq', '-vf', type=int, default=None,
                         help='visualisation frequency in iteration')
 
-    parser.add_argument('--crop_width', '-cw', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
-    parser.add_argument('--crop_height', '-ch', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
-    parser.add_argument('--grey', action='store_true', help='greyscale')
-
+    # weights
     parser.add_argument('--lambda_rec_l1', '-l1', type=float, default=10.0, help='weight for L1 reconstruction loss')
     parser.add_argument('--lambda_rec_l2', '-l2', type=float, default=0.0, help='weight for L2 reconstruction loss')
+    parser.add_argument('--lambda_rec_ce', '-lce', type=float, default=0.0, help='weight for softmax focal reconstruction loss')
     parser.add_argument('--lambda_dis', '-ldis', type=float, default=1.0, help='weight for adversarial loss')
     parser.add_argument('--lambda_tv', '-ltv', type=float, default=0.0, help='weight for total variation')
     parser.add_argument('--lambda_mispair', '-lm', type=float, default=0, help='weight for discriminator rejecting mis-matched (real,real) pairs')
@@ -55,16 +65,20 @@ def arguments():
     parser.add_argument('--loss_ksize', '-lk', type=int, default=1,
                         help='take average pooling of this kernel size before computing L1 and L2 losses')
 
+    # data augmentation
+    parser.add_argument('--random_translate', '-rt', type=int, default=4, help='jitter input images by random translation')
+    parser.add_argument('--noise', '-n', type=float, default=0, help='strength of noise injection')
+    parser.add_argument('--noise_z', '-nz', type=float, default=0,
+                        help='strength of noise injection for the latent variable')
+
+    # load model/optimizer
     parser.add_argument('--load_optimizer', '-mo', action='store_true', help='load optimizer parameters')
     parser.add_argument('--model_gen', '-m', default='')
     parser.add_argument('--model_dis', '-md', default='')
     parser.add_argument('--optimizer', '-op',choices=optim.keys(),default='Adam',
                         help='optimizer')
-    parser.add_argument('--weight_decay', '-wd', type=float, default=1e-8,  #default:  1e-7
-                        help='weight decay for regularization')
-    parser.add_argument('--weight_decay_norm', '-wn', choices=['l1','l2'], default='l2',
-                        help='norm of weight decay for regularization')
 
+    # network
     parser.add_argument('--dtype', '-dt', choices=dtypes.keys(), default='fp32',
                         help='floating point precision')
     parser.add_argument('--eqconv', '-eq', action='store_true',
@@ -73,13 +87,6 @@ def arguments():
                         help='Separable Convolution')
     parser.add_argument('--senet', '-se', action='store_true',
                         help='Enable Squeeze-and-Excitation mechanism')
-
-
-    # data augmentation
-    parser.add_argument('--random_translate', '-rt', type=int, default=4, help='jitter input images by random translation')
-    parser.add_argument('--noise', '-n', type=float, default=0, help='strength of noise injection')
-    parser.add_argument('--noise_z', '-nz', type=float, default=0,
-                        help='strength of noise injection for the latent variable')
 
     # discriminator
     parser.add_argument('--dis_activation', '-da', default='lrelu', choices=activation_func.keys())
@@ -138,6 +145,7 @@ def arguments():
     parser.add_argument('--skipdim', '-sd', type=int, default=4,
                         help='channel number for skip connections')
 
+    ####
     args = parser.parse_args()
     args.out = os.path.join(args.out, dt.now().strftime('%m%d_%H%M')+"_cgan")
 

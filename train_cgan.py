@@ -46,8 +46,8 @@ def main():
         from dataset_dicom import Dataset
     else:
         from dataset import Dataset  
-    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
-    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
+    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
+    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
     args.crop_height,args.crop_width = train_d.crop
 
     # setup training/validation data iterators
@@ -56,7 +56,11 @@ def main():
     test_iter_gt = chainer.iterators.SerialIterator(train_d, args.nvis, shuffle=False)   ## same as training data; used for validation
 
     args.ch = len(train_d[0][0])
-    args.out_ch = len(train_d[0][1])
+    if args.class_num>0:
+        args.out_ch = args.class_num
+        args.gen_out_activation='none'
+    else:
+        args.out_ch = len(train_d[0][1])
     print("Input channels {}, Output channels {}".format(args.ch,args.out_ch))
 
     ## Set up models
@@ -144,20 +148,32 @@ def main():
         trainer.extend(extensions.dump_graph('gen/loss_L1', out_name='gen.dot'))
     elif args.lambda_rec_l2 > 0:
         trainer.extend(extensions.dump_graph('gen/loss_L2', out_name='gen.dot'))
+    elif args.lambda_rec_ce > 0:
+        trainer.extend(extensions.dump_graph('gen/loss_CE', out_name='gen.dot'))
 
     ## log outputs
     log_keys = ['epoch', 'iteration','lr']
-    log_keys_gen = ['gen/loss_L1', 'gen/loss_L2', 'gen/loss_dis', 'myval/loss_L1', 'myval/loss_L2', 'gen/loss_tv']
+    log_keys_gen = ['myval/loss_L1', 'myval/loss_L2']
     log_keys_dis = []
+    if args.lambda_rec_l1 > 0:
+        log_keys_gen.append('gen/loss_L1')
+    if args.lambda_rec_l2 > 0:
+        log_keys_gen.append('gen/loss_L2')
+    if args.lambda_rec_ce > 0:
+        log_keys_gen.append('gen/loss_CE','myval/loss_CE')
+    if args.lambda_tv > 0:
+        log_keys_gen.append('gen/loss_tv')     
     if args.lambda_dis>0:
-        log_keys_dis.extend(['dis/loss_real','dis/loss_fake','dis/loss_mispair'])
+        log_keys_dis.extend(['gen/loss_dis','dis/loss_real','dis/loss_fake'])
+    if args.lambda_mispair > 0:
+        log_keys_dis.append('dis/loss_mispair')     
     if args.dis_wgan:
         log_keys_dis.extend(['dis/loss_gp'])
     trainer.extend(extensions.LogReport(trigger=display_interval))
     trainer.extend(extensions.PrintReport(log_keys+log_keys_gen+log_keys_dis), trigger=display_interval)
     if extensions.PlotReport.available():
         trainer.extend(extensions.PlotReport(log_keys_gen, 'iteration', trigger=display_interval, file_name='loss_gen.png', postprocess=plot_log))
-        trainer.extend(extensions.PlotReport(log_keys_dis, 'iteration', trigger=display_interval, file_name='loss_dis.png', postprocess=plot_log))
+        trainer.extend(extensions.PlotReport(log_keys_dis, 'iteration', trigger=display_interval, file_name='loss_dis.png'))
     trainer.extend(extensions.ProgressBar(update_interval=10))
 #    trainer.extend(extensions.ParameterStatistics(gen))
     # learning rate scheduling

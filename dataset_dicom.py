@@ -10,7 +10,7 @@ from chainercv.transforms import random_crop,center_crop, resize
 from consts import dtypes
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), random=0, grey=True, imgtype='dcm', BtoA=False):
+    def __init__(self, datalist, DataDir, from_col, to_col, class_num=0, crop=(None,None), random=0, grey=True, imgtype='dcm', BtoA=False):
         self.dataset = []
         self.base = -1024
         self.range = 2000
@@ -18,6 +18,7 @@ class Dataset(dataset_mixin.DatasetMixin):
         self.grey = True
         self.random = random # random crop/flip for data augmentation
         self.dtype = np.float32
+        self.class_num = class_num
         ## an input/output image can consist of multiple images; they are stacked as channels
         if datalist == '__train__':
             for fn in glob.glob(os.path.join(DataDir,"trainA/*.{}".format(imgtype))):
@@ -70,7 +71,10 @@ class Dataset(dataset_mixin.DatasetMixin):
         else:
             ref_dicom_out = dicom.read_file(ol[0], force=True)
             ref_dicom_out.file_meta.TransferSyntaxUID = dicom.uid.ImplicitVRLittleEndian
-            imgs_out = self.img2var(ref_dicom_out.pixel_array.astype(self.dtype)+ref_dicom_out.RescaleIntercept)[np.newaxis,:,:]
+            if self.class_num>0:
+                imgs_out = self.img2var_onehot(ref_dicom_out.pixel_array.astype(np.int64))
+            else:
+                imgs_out = self.img2var(ref_dicom_out.pixel_array.astype(self.dtype)+ref_dicom_out.RescaleIntercept)[np.newaxis,:,:]
         H = self.crop[0] if self.crop[0] else 16*((imgs_in.shape[1]-2*self.random)//16)
         W = self.crop[1] if self.crop[1] else 16*((imgs_in.shape[2]-2*self.random)//16)
         if self.random: # random crop/flip
@@ -93,9 +97,12 @@ class Dataset(dataset_mixin.DatasetMixin):
         # cut off mask [-1,1] or [0,1] output
         return(2*(np.clip(img,self.base,self.base+self.range)-self.base)/self.range-1.0)
 #        return((np.clip(img,self.base,self.base+self.range)-self.base)/self.range)
-    
+
+    def img2var_onehot(self,img):
+        return(np.eye(self.class_num)[img].astype(np.float32).transpose((2,0,1)))
+
     def var2img(self,var):
-        return(0.5*(1.0+var)*self.range + self.base)
+        return((0.5*(1.0+var)*self.range + self.base).squeeze())
 #        return(np.round(var*self.range + self.base))
 
     def overwrite(self,new,fn,salt):

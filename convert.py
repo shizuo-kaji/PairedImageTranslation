@@ -37,15 +37,15 @@ if __name__ == '__main__':
         with open(args.argfile, 'r') as f:
             larg = json.load(f)
             root=os.path.dirname(args.argfile)
-            for x in ['grey',
-              'gen_norm','gen_activation','gen_out_activation','gen_nblock','gen_chs','gen_sample','gen_down','gen_up','gen_ksize','unet','skipdim','latent_dim',
-              'gen_fc','gen_fc_activation','spconv','eqconv','senet','dtype','btoa']:
+            for x in ['grey','class_num',
+                'gen_norm','gen_activation','gen_out_activation','gen_nblock','gen_chs','gen_sample','gen_down','gen_up','gen_ksize','unet','skipdim','latent_dim',
+                'gen_fc','gen_fc_activation','gen_out_activation','spconv','eqconv','senet','dtype','btoa']:
                 if x in larg:
                     setattr(args, x, larg[x])
             if not args.model_gen:
                 if larg["epoch"]:
                     args.model_gen=os.path.join(root,'gen_{}.npz'.format(larg["epoch"]))
-                    
+
     args.random = 0
     save_args(args, outdir)
     print(args)
@@ -73,7 +73,10 @@ if __name__ == '__main__':
 #    iterator = chainer.iterators.SerialIterator(dataset, args.batch_size,repeat=False, shuffle=False)
 
     args.ch = len(dataset[0][0])
-    args.out_ch = len(dataset[0][1])
+    if args.class_num>0:
+        args.out_ch = args.class_num
+    else:
+        args.out_ch = len(dataset[0][1])
     print("Input channels {}, Output channels {}".format(args.ch,args.out_ch))
 
     ## load generator models
@@ -99,6 +102,8 @@ if __name__ == '__main__':
         imgs = Variable(x_in)
         with chainer.using_config('train', False), chainer.function.no_backprop_mode():
             out_v = gen(imgs)
+            if args.class_num>0:
+                out_v = F.argmax(out_v,axis=1)
         if args.gpu >= 0:
             imgs = xp.asnumpy(imgs.array)
             out = xp.asnumpy(out_v.array)
@@ -110,23 +115,29 @@ if __name__ == '__main__':
         for i in range(len(out)):
             fn = dataset.get_img_path(cnt)
             print("\nProcessing {}".format(fn))
-            new = dataset.var2img(out[i])
+            if args.class_num>0:
+                new = out[i]
+                print(new.shape)
+            else:
+                new = dataset.var2img(out[i])
             print("raw value: {} {}".format(np.min(out[i]),np.max(out[i])))
             print("image value: {} {}".format(np.min(new),np.max(new)))
             bfn,ext = os.path.splitext(fn)
             # converted image
             if args.imgtype=="dcm":
                 path = os.path.join(outdir,os.path.basename(fn))
-                ref_dicom = dataset.overwrite(new[0],fn,salt)
+                ref_dicom = dataset.overwrite(new,fn,salt)
                 ref_dicom.save_as(path)
             elif args.imgtype=="npy":
                 path = os.path.join(outdir,os.path.basename(bfn))
-                np.save(path,new[0])
-#                path = os.path.join(outdir,os.path.basename(bfn))+".txt"
-#                np.savetxt(path,new[0],fmt="%d")
-            # save image as well
-            path = os.path.join(outdir,os.path.basename(bfn))+".jpg"
-            write_image(new, path)
+                np.save(path,new)
+            elif args.imgtype=="txt":
+                path = os.path.join(outdir,os.path.basename(bfn))+".txt"
+                np.savetxt(path,new,fmt="%d")
+            else:
+            # save image
+                path = os.path.join(outdir,os.path.basename(bfn))+".jpg"
+                write_image(new, path)
 
             cnt += 1
         ####

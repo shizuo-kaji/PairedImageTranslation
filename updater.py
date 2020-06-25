@@ -86,6 +86,13 @@ class pixupdater(chainer.training.StandardUpdater):
         dy = x[:, :, :, 1:] - x[:, :, :, :-1]
         return F.average(F.absolute(dx))+F.average(F.absolute(dy))
 
+    ## multi-class focal loss
+    def softmax_focalloss(self, x, t, class_num=4, gamma=2, eps=1e-7):
+        p = F.clip(F.softmax(x), x_min=eps, x_max=1-eps)
+#        print(p.shape,self.xp.eye(class_num)[t[:,0,:,:]].shape)
+        q = -t * F.log(p)
+        return F.sum(q * ((1 - p) ** gamma))
+
     def update_core(self):        
         gen_optimizer = self.get_optimizer('gen')
         dis_optimizer = self.get_optimizer('dis')
@@ -95,9 +102,9 @@ class pixupdater(chainer.training.StandardUpdater):
         batch = self.get_iterator('main').next()
         x_in, t_out = self.converter(batch, self.device)
         x_in = Variable(x_in)
-        t_out = Variable(t_out)
         x_out = gen(add_noise(x_in, sigma=self.args.noise))
         x_in_out = F.concat([x_in,x_out])
+#        print(x_in.shape,x_out.shape, t_out.shape)
 
         loss_gen=0
         # reconstruction error
@@ -109,6 +116,11 @@ class pixupdater(chainer.training.StandardUpdater):
             loss_rec_l2 = F.mean_squared_error(x_out, t_out)
             loss_gen = loss_gen + self.args.lambda_rec_l2*loss_rec_l2
             chainer.report({'loss_L2': loss_rec_l2}, gen)
+        if self.args.lambda_rec_ce>0:
+            loss_rec_ce = self.softmax_focalloss(x_out, t_out)
+            loss_gen = loss_gen + self.args.lambda_rec_ce*loss_rec_ce
+            chainer.report({'loss_CE': loss_rec_ce}, gen)
+
         # total variation
         if self.args.lambda_tv > 0:
             loss_tv = self.total_variation2(x_out, self.args.tv_tau)

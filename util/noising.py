@@ -33,10 +33,10 @@ for fullname in sorted(glob.glob(os.path.join(args.root,"**/*.{}".format(args.im
         fileB = "trainB/{}_{}_clean.dcm".format(subdirname,fn)
         ref_dicom_in.save_as(os.path.join(args.out,fileB))
         dat = ref_dicom_in.pixel_array
-        print(np.min(dat),np.max(dat))
+#        print(np.min(dat),np.max(dat))
         # noise
         dat = (ref_dicom_in.pixel_array + np.random.poisson(args.noise,ref_dicom_in.pixel_array.shape)).astype(dt)
-        print(np.min(dat),np.max(dat))
+#        print(np.min(dat),np.max(dat))
         ref_dicom_in.PixelData = dat.tostring()
         fileA = "trainA/{}_{}_noise.dcm".format(subdirname,fn)
         ref_dicom_in.save_as(os.path.join(args.out,fileA))

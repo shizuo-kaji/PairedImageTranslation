@@ -40,7 +40,7 @@ def stack_imgs(fns,crop,resize=False,grey=False):
 
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), imgtype='jpg', random=0, grey=False, BtoA=False):
+    def __init__(self, datalist, DataDir, from_col, to_col, crop=(None,None), imgtype='jpg', random=0, grey=False, BtoA=False, **kwargs):
         self.dataset = []
         if datalist == '__train__':
             for fn in glob.glob(os.path.join(DataDir,"trainA/*.{}".format(imgtype))):

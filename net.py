@@ -267,6 +267,7 @@ class Encoder(chainer.Chain):
                 self.in_c = args.ch
                 self.in_h = args.crop_height
                 self.in_w = args.crop_width
+#                print(args.ch,args.crop_height,args.crop_width)
                 setattr(self, 'l' + str(i), LBR(args.crop_height*args.crop_width*args.ch, activation=args.gen_fc_activation))
             self.c0 = CBR(args.ch, self.chs[0], norm=args.gen_norm, sample=args.gen_sample, activation=args.gen_activation, equalised=args.eqconv)
             for i in range(1,len(self.chs)):
@@ -333,7 +334,7 @@ class Decoder(chainer.Chain):
             for i in range(1,len(self.chs)):
                 setattr(self, 'ua' + str(i), CBR(up_chs[-i], self.chs[-i-1], ksize=args.gen_ksize, norm=args.gen_norm, sample=args.gen_up, activation=args.gen_activation, dropout=args.gen_dropout, equalised=args.eqconv, separable=args.spconv))
             setattr(self, 'ua'+str(len(self.chs)),CBR(up_chs[0], up_chs[0], norm=args.gen_norm, sample='none', activation=args.gen_activation, equalised=args.eqconv, separable=args.spconv))
-            setattr(self, 'ul',CBR(up_chs[0], args.ch, norm='none', sample=args.gen_sample, activation=args.gen_out_activation, equalised=args.eqconv, separable=args.spconv))
+            setattr(self, 'ul',CBR(up_chs[0], args.out_ch, norm='none', sample=args.gen_sample, activation=args.gen_out_activation, equalised=args.eqconv, separable=args.spconv))
 
     def __call__(self, h):
         if isinstance(h,list):
