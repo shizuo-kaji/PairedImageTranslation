@@ -160,7 +160,7 @@ def main():
     if args.lambda_rec_l2 > 0:
         log_keys_gen.append('gen/loss_L2')
     if args.lambda_rec_ce > 0:
-        log_keys_gen.append('gen/loss_CE','myval/loss_CE')
+        log_keys_gen.extend(['gen/loss_CE','myval/loss_CE'])
     if args.lambda_tv > 0:
         log_keys_gen.append('gen/loss_tv')     
     if args.lambda_dis>0:
