@@ -41,18 +41,21 @@ def main():
     parser = argparse.ArgumentParser(description='create sinograms for artificial images')
     parser.add_argument('--size', '-s', type=int, default=128,
                         help='size of the image')
-    parser.add_argument('--num', '-n', type=int, default=2500,
+    parser.add_argument('--num', '-n', type=int, default=2000,
                         help='Number of images to be created')
     parser.add_argument('--noise', '-z', type=int, default=10,
                         help='Strength of noise')
     parser.add_argument('--outdir', '-o', default='radon',
                         help='output directory')
-    parser.add_argument('--root', '-R', default='.',
-                        help='directory containing image files')
     args = parser.parse_args()
 
     ###
     os.makedirs(args.outdir, exist_ok=True)
+    dir_origin = "original"
+    dir_sinogram = "sinogram"
+    os.makedirs(os.path.join(args.outdir,dir_origin), exist_ok=True)
+    os.makedirs(os.path.join(args.outdir,dir_sinogram), exist_ok=True)
+    fn_origin, fn_sinogram=[], []
     for i in range(args.num):
         img = np.full((args.size, args.size), 1, dtype=np.uint8)
         for j in range(np.random.randint(5,10)):
@@ -63,14 +66,16 @@ def main():
         cv2.circle(mask, center=(args.size // 2, args.size // 2), radius=args.size//2, color=255, thickness=-1)
         img = np.where(mask==255, img, 0)
         # original image
-        cv2.imwrite(os.path.join(args.outdir,"s{0:04d}.png".format(i)), img)
+        fn_origin.append(os.path.join(dir_origin,"s{0:04d}.png".format(i)))
+        cv2.imwrite(os.path.join(args.outdir,fn_origin[-1]), img)
         print("original #{}, min {}, max {}".format(i,np.min(img),np.max(img),img.shape))
         # radon transform
         theta = np.linspace(0., 180., num=args.size, endpoint=False)
         img = radon(img, theta=theta, circle=True)
         img = 255*(img/(2*args.size*args.size) )
         print("radon #{}, min {}, max {}".format(i,np.min(img),np.max(img),img.shape))
-        cv2.imwrite(os.path.join(args.outdir,"r{0:04d}.png".format(i)), np.clip(img,0,255).astype(np.uint8))
+        fn_sinogram.append(os.path.join(dir_sinogram,"r{0:04d}.png".format(i)))
+        cv2.imwrite(os.path.join(args.outdir,fn_sinogram[-1]), np.clip(img,0,255).astype(np.uint8))
         # add noise
 #        img = np.clip(img+np.random.randint(-args.noise,args.noise,img.shape),0,255)
 #        print("radon w/ noise #{}, min {}, max {}".format(i,np.min(img),np.max(img),img.shape))
@@ -78,6 +83,15 @@ def main():
         # reconstructed by inverse radon transform
 #        reconstruction = iradon(img/256 * 2*args.size*args.size, theta=theta, circle=True)
 #        cv2.imwrite(os.path.join(args.outdir,"i{0:04d}.png".format(i)), reconstruction)
+
+    ### file list
+    n=int(args.num*0.8)
+    with open(os.path.join(args.outdir,"ct_reconst_train.txt"), "w") as f:
+        for i in range(n):
+            f.write("{}\t{}\n".format(fn_origin[i],fn_sinogram[i]))
+    with open(os.path.join(args.outdir,"ct_reconst_val.txt"), "w") as f:
+        for i in range(n,args.num):
+            f.write("{}\t{}\n".format(fn_origin[i],fn_sinogram[i]))
 
 if __name__ == '__main__':
     main()
