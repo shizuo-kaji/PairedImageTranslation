@@ -38,7 +38,7 @@ if __name__ == '__main__':
         with open(args.argfile, 'r') as f:
             larg = json.load(f)
             root=os.path.dirname(args.argfile)
-            for x in ['grey','class_num','clip_below','clip_above',
+            for x in ['grey','class_num','clip_below','clip_above','out_ch',
                 'gen_norm','gen_activation','gen_out_activation','gen_nblock','gen_chs','gen_sample','gen_down','gen_up','gen_ksize','unet','skipdim','latent_dim',
                 'gen_fc','gen_fc_activation','gen_out_activation','spconv','eqconv','senet','dtype','btoa']:
                 if x in larg:
@@ -70,7 +70,11 @@ if __name__ == '__main__':
 #    iterator = chainer.iterators.SerialIterator(dataset, args.batch_size,repeat=False, shuffle=False)
 
     args.ch = len(dataset[0][0])
-    args.out_ch = len(dataset[0][1])
+    if not hasattr(args, 'out_ch'):
+        if args.class_num>0:
+            args.out_ch = args.class_num
+        else:
+            args.out_ch = len(dataset[0][1])
     print("Input channels {}, Output channels {}".format(args.ch,args.out_ch))
 
     ## load generator models
@@ -96,8 +100,6 @@ if __name__ == '__main__':
         imgs = Variable(x_in)
         with chainer.using_config('train', False), chainer.function.no_backprop_mode():
             out_v = gen(imgs)
-            if args.class_num>0:
-                out_v = F.argmax(out_v,axis=1)
         if args.gpu >= 0:
             imgs = xp.asnumpy(imgs.array)
             out = xp.asnumpy(out_v.array)
@@ -108,15 +110,16 @@ if __name__ == '__main__':
         ## output images
         for i in range(len(out)):
             fn = dataset.get_img_path(cnt)
+            bfn,ext = os.path.splitext(fn)
             print("\nProcessing {}".format(fn))
             if args.class_num>0:
-                new = out[i]
+                write_image((255*np.stack([out[i,2],np.zeros_like(out[i,0]),out[i,1]],axis=0)).astype(np.uint8), os.path.join(outdir,os.path.basename(bfn))+".jpg")
+                new = np.argmax(out[i],axis=0)
 #                print(new.shape)
             else:
                 new = dataset.var2img(out[i])
-            print("raw value: {} {}".format(np.min(out[i]),np.max(out[i])))
-            print("image value: {} {}".format(np.min(new),np.max(new)))
-            bfn,ext = os.path.splitext(fn)
+            print("raw value: {} -- {}".format(np.min(out[i]),np.max(out[i])))
+            print("image value: {} -- {}, ".format(np.min(new),np.max(new), new.shape))
             # converted image
             if args.imgtype=="dcm":
                 path = os.path.join(outdir,os.path.basename(fn))

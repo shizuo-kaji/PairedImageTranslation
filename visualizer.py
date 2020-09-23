@@ -20,7 +20,7 @@ def var2unit_img(var, base=-1.0, rng=2.0):
     return img
 
 def softmax_focalloss(x, t, gamma=2, eps=1e-7):
-    p = F.clip(F.softmax(x), x_min=eps, x_max=1-eps)
+    p = F.clip(x, x_min=eps, x_max=1-eps) ## we assume the input is already applied softmax
     q = -t * F.log(p)
     return F.average(q * ((1 - p) ** gamma))
 

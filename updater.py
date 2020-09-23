@@ -88,7 +88,8 @@ class pixupdater(chainer.training.StandardUpdater):
 
     ## multi-class focal loss
     def softmax_focalloss(self, x, t, gamma=2, eps=1e-7):
-        p = F.clip(F.softmax(x), x_min=eps, x_max=1-eps)
+#        p = F.clip(F.softmax(x), x_min=eps, x_max=1-eps)
+        p = F.clip(x, x_min=eps, x_max=1-eps)  ## we assume the input is already applied softmax
 #        print(p.shape, t.shape)
 #        print(p.shape,self.xp.eye(class_num)[t[:,0,:,:]].shape)
         q = -t * F.log(p)

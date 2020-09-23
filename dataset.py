@@ -138,7 +138,10 @@ class Dataset(dataset_mixin.DatasetMixin):
     def get_example(self, i):
         il,ol = self.dataset[i]
         imgs_in = self.stack_imgs(il)
-        imgs_out = self.stack_imgs(ol, onehot=(self.class_num>0) )
+        if il==ol:
+            imgs_out = imgs_in.copy()
+        else:
+            imgs_out = self.stack_imgs(ol, onehot=(self.class_num>0) )
 #        print(np.min(imgs_in),np.max(imgs_in),np.min(imgs_out),np.max(imgs_out))
         H = self.crop[0] if self.crop[0] else 16*((imgs_in.shape[1]-2*self.random)//16)
         W = self.crop[1] if self.crop[1] else 16*((imgs_in.shape[2]-2*self.random)//16)
