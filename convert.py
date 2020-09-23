@@ -21,6 +21,7 @@ from chainercv.transforms import resize
 from chainerui.utils import save_args
 from arguments import arguments 
 from consts import dtypes
+from dataset import Dataset  
 
 
 if __name__ == '__main__':
@@ -37,7 +38,7 @@ if __name__ == '__main__':
         with open(args.argfile, 'r') as f:
             larg = json.load(f)
             root=os.path.dirname(args.argfile)
-            for x in ['grey','class_num',
+            for x in ['grey','class_num','clip_below','clip_above',
                 'gen_norm','gen_activation','gen_out_activation','gen_nblock','gen_chs','gen_sample','gen_down','gen_up','gen_ksize','unet','skipdim','latent_dim',
                 'gen_fc','gen_fc_activation','gen_out_activation','spconv','eqconv','senet','dtype','btoa']:
                 if x in larg:
@@ -52,18 +53,14 @@ if __name__ == '__main__':
     chainer.config.dtype = dtypes[args.dtype]
 
     ## load images
-    if args.imgtype=="dcm":
-        from dataset_dicom import Dataset
-    else:
-        from dataset import Dataset  
     if args.val=="__test__":
-        print("Load Dataset from disk: {}".format(args.root))
+        print("Load Dataset from directory: {}".format(args.root))
         with open(os.path.join(args.out,"filenames.txt"),'w') as output:
             for file in glob.glob(os.path.join(args.root,"**/*.{}".format(args.imgtype)), recursive=True):
                 output.write('{}\n'.format(file))
-        dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], crop=(args.crop_height,args.crop_width), random=0, grey=args.grey)
+        dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], clip=(args.clip_below,args.clip_above), crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, random=0, grey=args.grey, BtoA=args.btoa)
     elif args.val:
-        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, crop=(args.crop_height,args.crop_width), random=0, grey=args.grey, BtoA=args.btoa)
+        dataset = Dataset(args.val, args.root, args.from_col, args.from_col,  clip=(args.clip_below,args.clip_above), crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, random=0, grey=args.grey, BtoA=args.btoa)
     else:
         print("Specify file or dir!")
         exit
@@ -73,10 +70,7 @@ if __name__ == '__main__':
 #    iterator = chainer.iterators.SerialIterator(dataset, args.batch_size,repeat=False, shuffle=False)
 
     args.ch = len(dataset[0][0])
-    if args.class_num>0:
-        args.out_ch = args.class_num
-    else:
-        args.out_ch = len(dataset[0][1])
+    args.out_ch = len(dataset[0][1])
     print("Input channels {}, Output channels {}".format(args.ch,args.out_ch))
 
     ## load generator models
@@ -117,7 +111,7 @@ if __name__ == '__main__':
             print("\nProcessing {}".format(fn))
             if args.class_num>0:
                 new = out[i]
-                print(new.shape)
+#                print(new.shape)
             else:
                 new = dataset.var2img(out[i])
             print("raw value: {} {}".format(np.min(out[i]),np.max(out[i])))
@@ -126,7 +120,7 @@ if __name__ == '__main__':
             # converted image
             if args.imgtype=="dcm":
                 path = os.path.join(outdir,os.path.basename(fn))
-                ref_dicom = dataset.overwrite(new,fn,salt)
+                ref_dicom = dataset.overwrite_dicom(new,fn,salt)
                 ref_dicom.save_as(path)
             elif args.imgtype=="npy":
                 path = os.path.join(outdir,os.path.basename(bfn))

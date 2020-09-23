@@ -15,7 +15,7 @@ matplotlib.use('Agg')
 import chainer
 from chainer import training,serializers
 from chainer.training import extensions
-#from chainerui.extensions import CommandsExtension
+from chainerui.extensions import CommandsExtension
 from chainerui.utils import save_args
 import chainer.functions as F
 from chainer.dataset import convert
@@ -26,6 +26,7 @@ from arguments import arguments
 from dataset import Dataset
 from visualizer import VisEvaluator
 from consts import dtypes,optim
+from dataset import Dataset  
 
 def plot_log(f,a,summary):
     a.set_yscale('log')
@@ -42,12 +43,8 @@ def main():
     #print('cuDNN availability:', chainer.cuda.cudnn_enabled)
 
     ## dataset preparation
-    if args.imgtype=="dcm":
-        from dataset_dicom import Dataset
-    else:
-        from dataset import Dataset  
-    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
-    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
+    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, clip=(args.clip_below,args.clip_above), class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
+    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, clip=(args.clip_below,args.clip_above), class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
     args.crop_height,args.crop_width = train_d.crop
 
     # setup training/validation data iterators
@@ -55,12 +52,12 @@ def main():
     test_iter = chainer.iterators.SerialIterator(test_d, args.nvis, shuffle=False)
     test_iter_gt = chainer.iterators.SerialIterator(train_d, args.nvis, shuffle=False)   ## same as training data; used for validation
 
-    args.ch = len(train_d[0][0])
     if args.class_num>0:
-        args.out_ch = args.class_num
-        args.gen_out_activation='none'
-    else:
-        args.out_ch = len(train_d[0][1])
+        args.gen_out_activation='softmax'
+        print("the last activation is set to softmax for classification.")
+
+    args.ch = len(train_d[0][0])
+    args.out_ch = len(train_d[0][1])
     print("Input channels {}, Output channels {}".format(args.ch,args.out_ch))
 
     ## Set up models
@@ -127,7 +124,7 @@ def main():
         device=args.gpu)
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
 
-    ## save learnt results at an interval
+    ## save learnt results at a specified interval or at the end of training
     if args.snapinterval<0:
         args.snapinterval = args.epoch
     snapshot_interval = (args.snapinterval, 'epoch')
@@ -144,6 +141,7 @@ def main():
         trainer.extend(extensions.snapshot_object(
             opt_dis, 'opt_dis_{.updater.epoch}.npz'), trigger=snapshot_interval)
 
+    ## plot NN graph
     if args.lambda_rec_l1 > 0:
         trainer.extend(extensions.dump_graph('gen/loss_L1', out_name='gen.dot'))
     elif args.lambda_rec_l2 > 0:
@@ -192,10 +190,10 @@ def main():
     if not args.vis_freq:
         args.vis_freq = len(train_d)//2        
     trainer.extend(VisEvaluator({"test":test_iter, "train":test_iter_gt}, {"gen":gen},
-            params={'vis_out': vis_folder}, device=args.gpu),trigger=(args.vis_freq, 'iteration') )
+            params={'vis_out': vis_folder, 'args': args}, device=args.gpu),trigger=(args.vis_freq, 'iteration') )
 
     # ChainerUI: removed until ChainerUI updates to be compatible with Chainer 6.0
-#    trainer.extend(CommandsExtension())
+    trainer.extend(CommandsExtension())
 
     # Run the training
     print("trainer start")

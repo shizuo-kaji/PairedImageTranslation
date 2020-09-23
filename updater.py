@@ -87,11 +87,12 @@ class pixupdater(chainer.training.StandardUpdater):
         return F.average(F.absolute(dx))+F.average(F.absolute(dy))
 
     ## multi-class focal loss
-    def softmax_focalloss(self, x, t, class_num=4, gamma=2, eps=1e-7):
+    def softmax_focalloss(self, x, t, gamma=2, eps=1e-7):
         p = F.clip(F.softmax(x), x_min=eps, x_max=1-eps)
+#        print(p.shape, t.shape)
 #        print(p.shape,self.xp.eye(class_num)[t[:,0,:,:]].shape)
         q = -t * F.log(p)
-        return F.sum(q * ((1 - p) ** gamma))
+        return F.average(q * ((1 - p) ** gamma))
 
     def update_core(self):        
         gen_optimizer = self.get_optimizer('gen')

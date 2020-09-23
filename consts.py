@@ -37,6 +37,7 @@ activation_func = {
     'lrelu': lambda x: F.leaky_relu(x, slope=0.2),
     'tanh': F.tanh,
     'sigmoid': F.sigmoid,
+    'softmax': F.softmax,
     'none': None,
 }
 

@@ -284,7 +284,7 @@ class Encoder(chainer.Chain):
         h = x
         for i in range(self.nfc):
             h=F.reshape(getattr(self, 'l' + str(i))(h),(-1,self.in_c,self.in_h,self.in_w))
-        e = self.c0(x)
+        e = self.c0(h)
         if self.unet=='conv':
             h = [self.s0(e)]
         elif self.unet in ['concat','add']:

@@ -42,7 +42,7 @@ with some improvements.
 ```
 pip install cupy,chainer,chainerui,chainercv
 ```
-- optional: pydicom (if DICOM files are to be handled)
+- optional: pydicom (to read DICOM files)
 ```
 pip install pydicom
 ```
@@ -118,7 +118,7 @@ It produces sample images of Radon transform and text files ct_reconst_train.txt
 
 An example command-line arguments for training is
 ```
-python train_cgan.py -t radon/ct_reconst_train.txt --val radon/ct_reconst_val.txt -R radon -o result  -cw 128 -ch 128 -rt 0 --grey -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3
+python train_cgan.py -t radon/ct_reconst_train.txt --val radon/ct_reconst_val.txt -R radon -o result  -cw 128 -ch 128 -rt 0 --grey -g 0 -e 200 -gfc 1 -u none -l1 0 -l2 1.0 -ldis 0.1 -ltv 1e-3 --btoa
 ```
 which learns translation of images in ct_reconst_train.txt placed under "radon/" and outputs the result under "result/". 
 
@@ -133,7 +133,7 @@ Crop size may have to be a power of two, if you encounter any error regarding th
 ### Pixelwise classification (segmentation)
 If the target images encodes classes for each pixel, 
 ```
-python train_cgan.py -R segmentation -o result -it dcm -e 200 -l1 0 -l2 0.0 -lce 1 -ldis 0 -cn 4
+python train_cgan.py -R segmentation -o result -it dcm -e 200 -l1 0 -l2 1.0  -ldis 0 -cn 4
 ```
 where (**-cn 4**) tells that there are four classes which are labeled 0,1,2, and 3.
 
@@ -185,7 +185,7 @@ python convert.py -cw 512 -ch 512 -b 10 --val CPTAC-SAR_val.txt -it dcm -R image
 where ?? denotes the date_time automatically assigned for the output of the training.
 The converted images will be found under "converted".
 
-You can also use this trained model to denoise other images under "testImg" with a similar noise characteristics
+You can also use this trained model to denoise any other images placed under "testImg" with a similar noise characteristics
 ```
 python convert.py -cw 512 -ch 512 -b 10 -it dcm -R testImg -o converted -m result/??/gen_50.npz -a result/??/args 
 ```

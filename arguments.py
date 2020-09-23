@@ -24,7 +24,9 @@ def arguments():
     parser.add_argument('--imgtype', '-it', default="jpg", help="image file type (file extension)")
     parser.add_argument('--crop_width', '-cw', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
     parser.add_argument('--crop_height', '-ch', type=int, default=None, help='this value may have to be divisible by a large power of two (if you encounter errors)')
-    parser.add_argument('--grey', action='store_true', help='greyscale')
+    parser.add_argument('--grey', action='store_true', help='load image (jpg/png) in greyscale')
+    parser.add_argument('--clip_below', '-cb', default=None, help="clip pixel value from below")
+    parser.add_argument('--clip_above', '-ca', default=None, help="clip pixel value from above")    
     parser.add_argument('--class_num', '-cn', type=int,default=0, help='number of classes for pixelwise classification')
 
     # training

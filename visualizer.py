@@ -13,16 +13,16 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import warnings
 
-def postprocess(var):
+def var2unit_img(var, base=-1.0, rng=2.0):
     img = var.data.get()
-    img = (img + 1.0) / 2.0  # [0, 1)
+    img = (img - base) / rng  # [0, 1)
     img = img.transpose(0, 2, 3, 1)
     return img
 
-def softmax_focalloss(x, t, class_num=4, gamma=2, eps=1e-7):
+def softmax_focalloss(x, t, gamma=2, eps=1e-7):
     p = F.clip(F.softmax(x), x_min=eps, x_max=1-eps)
     q = -t * F.log(p)
-    return F.sum(q * ((1 - p) ** gamma))
+    return F.average(q * ((1 - p) ** gamma))
 
 class VisEvaluator(extensions.Evaluator):
     name = "myval"
@@ -30,6 +30,7 @@ class VisEvaluator(extensions.Evaluator):
         params = kwargs.pop('params')
         super(VisEvaluator, self).__init__(*args, **kwargs)
         self.vis_out = params['vis_out']
+        self.args= params['args']
         self.count = 0
         warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -40,13 +41,13 @@ class VisEvaluator(extensions.Evaluator):
         for k,dataset in enumerate(['test','train']):
             batch =  self._iterators[dataset].next()
             x_in, t_out = chainer.dataset.concat_examples(batch, self.device)
-            x_in = Variable(x_in)
-            t_out = Variable(t_out)
+            x_in = Variable(x_in)   # original image
+            t_out = Variable(t_out) # corresponding translated image (ground truth)
 
             with chainer.using_config('train', False), chainer.function.no_backprop_mode():
-                x_out = self._targets['gen'](x_in)
+                x_out = self._targets['gen'](x_in) # translated image by NN
             
-            if k==0:
+            if k==0:  # for test dataset, compute some statistics
                 fig = plt.figure(figsize=(9, 6 * len(batch)))
                 gs = gridspec.GridSpec(2* len(batch), 3, wspace=0.1, hspace=0.1)
                 loss_rec_L1 = F.mean_absolute_error(x_out, t_out)
@@ -54,11 +55,15 @@ class VisEvaluator(extensions.Evaluator):
                 loss_rec_CE = softmax_focalloss(x_out, t_out)
                 result = {"myval/loss_L1": loss_rec_L1, "myval/loss_L2": loss_rec_L2, "myval/loss_CE": loss_rec_CE}
 
-            if x_out.shape[1]>3:
-                x_out = F.softmax(x_out)
-
+            ## iterate over batch
             for i, var in enumerate([x_in, t_out, x_out]):
-                imgs = postprocess(var)
+                if i % 3 != 0 and self.args.class_num>0: # t_out, x_out
+                    imgs = var2unit_img(var,0,1)
+                    imgs[:,:,:,0] = 0 # class 0 => black  ###### TODO
+                    imgs = np.roll(imgs,1,axis=3)  ## BRG
+                else:
+                    imgs = var2unit_img(var)
+#                print(imgs.shape,np.min(imgs),np.max(imgs))
                 for j in range(len(imgs)):
                     ax = fig.add_subplot(gs[j+k*len(batch),i])
                     if(imgs[j].shape[2] == 3):
