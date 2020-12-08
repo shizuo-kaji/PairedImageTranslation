@@ -15,6 +15,7 @@ import net
 import random
 import chainer
 import chainer.functions as F
+import chainer.links as L
 from chainer import serializers, Variable, cuda
 from chainercv.utils import write_image
 from chainercv.transforms import resize
@@ -26,30 +27,21 @@ from dataset import Dataset
 
 if __name__ == '__main__':
     args = arguments()
-    args.suffix = "out"
+    args.random = 0 ## necessary to infer crop size
     outdir = os.path.join(args.out, dt.now().strftime('out_%m%d_%H%M'))
 
     if args.gpu >= 0:
         cuda.get_device_from_id(args.gpu).use()
         print('use gpu {}'.format(args.gpu))
 
-    ## load arguments from "arg" file used in training
-    if args.argfile:
-        with open(args.argfile, 'r') as f:
-            larg = json.load(f)
-            root=os.path.dirname(args.argfile)
-            for x in ['grey','class_num','clip_below','clip_above','out_ch',
-                'gen_norm','gen_activation','gen_out_activation','gen_nblock','gen_chs','gen_sample','gen_down','gen_up','gen_ksize','unet','skipdim','latent_dim',
-                'gen_fc','gen_fc_activation','gen_out_activation','spconv','eqconv','senet','dtype','btoa']:
-                if x in larg:
-                    setattr(args, x, larg[x])
-            if not args.model_gen:
-                if larg["epoch"]:
-                    args.model_gen=os.path.join(root,'gen_{}.npz'.format(larg["epoch"]))
+    # infer model names
+    if not args.model_gen:
+        root=os.path.dirname(args.argfile)
+        args.model_gen=os.path.join(root,'enc_x{}.npz'.format(args.epoch))
 
-    args.random = 0
     save_args(args, outdir)
     print(args)
+    chainer.config.autotune = True
     chainer.config.dtype = dtypes[args.dtype]
 
     ## load images
@@ -58,9 +50,9 @@ if __name__ == '__main__':
         with open(os.path.join(args.out,"filenames.txt"),'w') as output:
             for file in glob.glob(os.path.join(args.root,"**/*.{}".format(args.imgtype)), recursive=True):
                 output.write('{}\n'.format(file))
-        dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], clip=(args.clip_below,args.clip_above), crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, random=0, grey=args.grey, BtoA=args.btoa)
+        dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, random=0, grey=args.grey, BtoA=args.btoa)
     elif args.val:
-        dataset = Dataset(args.val, args.root, args.from_col, args.from_col,  clip=(args.clip_below,args.clip_above), crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, random=0, grey=args.grey, BtoA=args.btoa)
+        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, random=0, grey=args.grey, BtoA=args.btoa)
     else:
         print("Specify file or dir!")
         exit
@@ -69,22 +61,44 @@ if __name__ == '__main__':
     iterator = chainer.iterators.MultithreadIterator(dataset, args.batch_size, n_threads=3, repeat=False, shuffle=False)   ## best performance
 #    iterator = chainer.iterators.SerialIterator(dataset, args.batch_size,repeat=False, shuffle=False)
 
-    args.ch = len(dataset[0][0])
-    if not hasattr(args, 'out_ch'):
-        if args.class_num>0:
-            args.out_ch = args.class_num
-        else:
-            args.out_ch = len(dataset[0][1])
+    if args.ch != len(dataset[0][0]):
+        print("number of input channels is different during training.")
     print("Input channels {}, Output channels {}".format(args.ch,args.out_ch))
 
     ## load generator models
-    if args.model_gen:
+    if "enc" in args.model_gen:
+        if (args.gen_pretrained_encoder and args.gen_pretrained_lr_ratio == 0):
+            if "resnet" in args.gen_pretrained_encoder:
+                pretrained = L.ResNet50Layers()
+                print("Pretrained ResNet model loaded.")
+            else:
+                pretrained = L.VGG16Layers()
+                print("Pretrained VGG model loaded.")
+            if args.gpu >= 0:
+                pretrained.to_gpu()
+            enc = net.Encoder(args, pretrained)
+        else:
+            enc = net.Encoder(args)
+        print('Loading {:s}..'.format(args.model_gen))
+        serializers.load_npz(args.model_gen, enc)
+        dec = net.Decoder(args)
+        modelfn = args.model_gen.replace('enc_x','dec_y')
+        modelfn = modelfn.replace('enc_y','dec_x')
+        print('Loading {:s}..'.format(modelfn))
+        serializers.load_npz(modelfn, dec)
+        if args.gpu >= 0:
+            enc.to_gpu()
+            dec.to_gpu()
+        xp = enc.xp
+        is_AE = True
+    elif "gen" in args.model_gen:
         gen = net.Generator(args)
         print('Loading {:s}..'.format(args.model_gen))
         serializers.load_npz(args.model_gen, gen)
         if args.gpu >= 0:
             gen.to_gpu()
         xp = gen.xp
+        is_AE = False
     else:
         print("Specify a learned model.")
         exit()        
@@ -99,7 +113,10 @@ if __name__ == '__main__':
         x_in, t_out = chainer.dataset.concat_examples(batch, device=args.gpu)
         imgs = Variable(x_in)
         with chainer.using_config('train', False), chainer.function.no_backprop_mode():
-            out_v = gen(imgs)
+            if is_AE:
+                out_v = dec(enc(imgs))
+            else:
+                out_v = gen(imgs)
         if args.gpu >= 0:
             imgs = xp.asnumpy(imgs.array)
             out = xp.asnumpy(out_v.array)

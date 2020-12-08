@@ -16,18 +16,10 @@ except:
 
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, clip=(None,None), class_num=0, crop=(None,None), imgtype='jpg', random=0, grey=False, BtoA=False, **kwargs):
+    def __init__(self, datalist, DataDir, from_col, to_col, clipA=(None,None), clipB=(None,None), class_num=0, crop=(None,None), imgtype='jpg', random=0, grey=False, BtoA=False, **kwargs):
         self.dataset = []
-        self.clip = [None,None]
-        if clip[0] is not None:
-            self.clip[0] = float(clip[0])
-        if clip[1] is not None:
-            self.clip[1] = float(clip[1])
-        if imgtype=='dcm':
-            if clip[0] is None:
-                self.clip[0] = -1024
-            if clip[1] is None:
-                self.clip[1] = 2000
+        self.clip_A = clipA
+        self.clip_B = clipB
 
         self.class_num=class_num
         if datalist == '__train__':
@@ -49,11 +41,6 @@ class Dataset(dataset_mixin.DatasetMixin):
             with open(datalist) as input:
                 for line in input:
                     files = line.strip().split('\t')
-                    if(len(files))<2:
-                        self.dataset.append([
-                            [os.path.join(DataDir,files[0])],
-                            [os.path.join(DataDir,files[0])]
-                        ])
                     if(len(files)<len(set(from_col).union(set(to_col)))):
                         print("Error in reading data file: ",files)
                         exit()
@@ -75,7 +62,7 @@ class Dataset(dataset_mixin.DatasetMixin):
         self.crop = crop
         self.grey = grey
         self.random = random
-        print("Cropped size: ",self.crop, "Clip: ",self.clip)
+        print("Cropped size: ",self.crop, "ClipA: ",self.clip_A, "ClipB: ",self.clip_B)
         print("loaded {} images".format(len(self.dataset)))
     
     def __len__(self):
@@ -85,12 +72,12 @@ class Dataset(dataset_mixin.DatasetMixin):
         return(self.dataset[i][0][0])
 
     def var2img(self,var):
-        if self.clip[0] is not None and self.clip[1] is not None:            
-            return (0.5*(var+1)*(self.clip[1]-self.clip[0])+self.clip[0]).squeeze()
+        if self.clip_B[0] is not None:            
+            return (0.5*(var+1)*(self.clip_B[1]-self.clip_B[0])+self.clip_B[0]).squeeze()
         else:
             return(0.5*(1.0+var)*255).squeeze()
     
-    def stack_imgs(self,fns,resize=False, onehot=False):
+    def stack_imgs(self,fns,resize=False, onehot=False, clip=(None,None)):
         imgs_in =[]
         for fn in fns:
             fn1,ext = os.path.splitext(fn)
@@ -108,7 +95,7 @@ class Dataset(dataset_mixin.DatasetMixin):
                 ref_dicom_in.file_meta.TransferSyntaxUID = dicom.uid.ImplicitVRLittleEndian
                 img_in  = ref_dicom_in.pixel_array+ref_dicom_in.RescaleIntercept
             else:  ## image file
-                img_in = read_image(fn, color=not self.grey)/127.5 -1.0
+                img_in = read_image(fn, color=not self.grey)
 
             # make the image shape to [C,H,W]
             if len(img_in.shape) == 2:
@@ -129,19 +116,18 @@ class Dataset(dataset_mixin.DatasetMixin):
             return(np.eye(self.class_num)[imgs_in[0].astype(np.uint64)].astype(np.float32).transpose((2,0,1)))
         else:
             ## clip and normalise to [-1,1]
-            if self.clip[0] is not None or self.clip[1] is not None:
-                imgs_in = np.clip(imgs_in, self.clip[0], self.clip[1])
-            if self.clip[0] is not None and self.clip[1] is not None:            
-                imgs_in = 2*(imgs_in-self.clip[0])/(self.clip[1]-self.clip[0]) - 1.0
+            if clip[0] is not None:
+                imgs_in = np.clip(imgs_in, clip[0], clip[1])
+                imgs_in = 2*(imgs_in-clip[0])/(clip[1]-clip[0]) - 1.0
             return(imgs_in.astype(np.float32))
 
     def get_example(self, i):
         il,ol = self.dataset[i]
-        imgs_in = self.stack_imgs(il)
+        imgs_in = self.stack_imgs(il, clip=self.clip_A)
         if il==ol:
             imgs_out = imgs_in.copy()
         else:
-            imgs_out = self.stack_imgs(ol, onehot=(self.class_num>0) )
+            imgs_out = self.stack_imgs(ol, onehot=(self.class_num>0), clip=self.clip_B)
 #        print(np.min(imgs_in),np.max(imgs_in),np.min(imgs_out),np.max(imgs_out))
         H = self.crop[0] if self.crop[0] else 16*((imgs_in.shape[1]-2*self.random)//16)
         W = self.crop[1] if self.crop[1] else 16*((imgs_in.shape[2]-2*self.random)//16)
@@ -166,7 +152,7 @@ class Dataset(dataset_mixin.DatasetMixin):
     def overwrite_dicom(self,new,fn,salt):
         ref_dicom = dicom.read_file(fn, force=True)
         dt=ref_dicom.pixel_array.dtype
-        img = np.full(ref_dicom.pixel_array.shape, self.clip[0], dtype=np.float32)
+        img = np.full(ref_dicom.pixel_array.shape, self.clip_B[0], dtype=np.float32)
         ch,cw = new.shape
         h = self.crop[0] if self.crop[0] else 16*((img.shape[0]-2*self.random)//16)
         w = self.crop[1] if self.crop[1] else 16*((img.shape[1]-2*self.random)//16)

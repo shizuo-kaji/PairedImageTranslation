@@ -12,17 +12,13 @@ from chainer.training import extensions
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import warnings
+from updater import softmax_focalloss
 
 def var2unit_img(var, base=-1.0, rng=2.0):
     img = var.data.get()
     img = (img - base) / rng  # [0, 1)
     img = img.transpose(0, 2, 3, 1)
     return img
-
-def softmax_focalloss(x, t, gamma=2, eps=1e-7):
-    p = F.clip(x, x_min=eps, x_max=1-eps) ## we assume the input is already applied softmax
-    q = -t * F.log(p)
-    return F.average(q * ((1 - p) ** gamma))
 
 class VisEvaluator(extensions.Evaluator):
     name = "myval"
@@ -45,7 +41,7 @@ class VisEvaluator(extensions.Evaluator):
             t_out = Variable(t_out) # corresponding translated image (ground truth)
 
             with chainer.using_config('train', False), chainer.function.no_backprop_mode():
-                x_out = self._targets['gen'](x_in) # translated image by NN
+                x_out = self._targets['dec_y'](self._targets['enc_x'](x_in)) # translated image by NN
             
             if k==0:  # for test dataset, compute some statistics
                 fig = plt.figure(figsize=(9, 6 * len(batch)))
@@ -60,13 +56,13 @@ class VisEvaluator(extensions.Evaluator):
                 if i % 3 != 0 and self.args.class_num>0: # t_out, x_out
                     imgs = var2unit_img(var,0,1)
                     imgs[:,:,:,0] = 0 # class 0 => black  ###### TODO
-                    imgs = np.roll(imgs,1,axis=3)  ## BRG
+                    imgs = np.roll(imgs,1,axis=3)[:,:,:,:3]  ## R0B, show only 3 classes (-1,0,1)
                 else:
                     imgs = var2unit_img(var)
 #                print(imgs.shape,np.min(imgs),np.max(imgs))
                 for j in range(len(imgs)):
                     ax = fig.add_subplot(gs[j+k*len(batch),i])
-                    if(imgs[j].shape[2] == 3):
+                    if(imgs[j].shape[2] == 3): ## RGB
                         ax.imshow(imgs[j], interpolation='none',vmin=0,vmax=1)
                     elif(imgs[j].shape[2] == 4):
                         ax.imshow(imgs[j][:,:,1:], interpolation='none',vmin=0,vmax=1)
