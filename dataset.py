@@ -23,19 +23,29 @@ class Dataset(dataset_mixin.DatasetMixin):
 
         self.class_num=class_num
         if datalist == '__train__':
-            for fn in glob.glob(os.path.join(DataDir,"trainA/*.{}".format(imgtype))):
-                fn2 = fn.replace('trainA','trainB')
-                if BtoA:
-                    self.dataset.append([[fn2],[fn]])
-                else:
-                    self.dataset.append([[fn],[fn2]])
+            dirlist = ["."]
+            for f in os.listdir(os.path.join(DataDir,"trainA")):
+                if os.path.isdir(os.path.join(DataDir,"trainA",f)):
+                    dirlist.append(f)
+            for dirname in dirlist:
+                for fn in glob.glob(os.path.join(DataDir,"trainA", dirname, "*.{}".format(imgtype))):
+                    fn2 = fn.replace('trainA','trainB')
+                    if BtoA:
+                        self.dataset.append([[fn2],[fn]])
+                    else:
+                        self.dataset.append([[fn],[fn2]])
         elif datalist == '__test__':
-            for fn in glob.glob(os.path.join(DataDir,"testA/*.{}".format(imgtype))):
-                fn2 = fn.replace('testA','testB')
-                if BtoA:
-                    self.dataset.append([[fn2],[fn]])
-                else:
-                    self.dataset.append([[fn],[fn2]])
+            dirlist = ["."]
+            for f in os.listdir(os.path.join(DataDir,"testA")):
+                if os.path.isdir(os.path.join(DataDir,"testA", f)):
+                    dirlist.append(f)
+            for dirname in dirlist:
+                for fn in glob.glob(os.path.join(DataDir,"testA", dirname, "*.{}".format(imgtype))):
+                    fn2 = fn.replace('testA','testB')
+                    if BtoA:
+                        self.dataset.append([[fn2],[fn]])
+                    else:
+                        self.dataset.append([[fn],[fn2]])
         else:
             ## an input/output image can consist of multiple images; they are stacked as channels
             with open(datalist) as input:
@@ -153,12 +163,13 @@ class Dataset(dataset_mixin.DatasetMixin):
         ref_dicom = dicom.read_file(fn, force=True)
         dt=ref_dicom.pixel_array.dtype
         img = np.full(ref_dicom.pixel_array.shape, self.clip_B[0], dtype=np.float32)
-        ch,cw = new.shape
-        h = self.crop[0] if self.crop[0] else 16*((img.shape[0]-2*self.random)//16)
-        w = self.crop[1] if self.crop[1] else 16*((img.shape[1]-2*self.random)//16)
+        ch,cw = img.shape
+        h,w = new.shape
+#        if np.min(img - ref_dicom.RescaleIntercept)<0:
+#            ref_dicom.RescaleIntercept = -1024
+        img[np.newaxis,(ch-h)//2:(ch+h)//2,(cw-w)//2:(cw+w)//2] = new
         if np.min(img - ref_dicom.RescaleIntercept)<0:
             ref_dicom.RescaleIntercept = -1024
-        img[np.newaxis,(ch-h)//2:(ch+h)//2,(cw-w)//2:(cw+w)//2] = new
         img -= ref_dicom.RescaleIntercept
         img = img.astype(dt)           
         print("min {}, max {}, intercept {}".format(np.min(img),np.max(img),ref_dicom.RescaleIntercept))

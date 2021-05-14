@@ -285,6 +285,7 @@ class Encoder(chainer.Chain):
                     self.layers = ['conv{}_2'.format(i) for i in range(1,min(3,args.gen_ndown+1))]
                     self.layers.extend(['conv{}_3'.format(i) for i in range(3,args.gen_ndown+1)])
                 if pretrained_model is None:
+                    self.update_base = True
                     if "resnet" in args.gen_pretrained_encoder:
                         self.base = L.ResNet50Layers()
                     else:
@@ -400,7 +401,7 @@ class Decoder(chainer.Chain):
         else:
             e = h
         if chainer.config.train and self.noise_z>0:   ## noise injection for latent
-            e.data += self.noise_z * e.xp.random.randn(*e.data.shape, dtype=e.dtype)
+            e.data += self.noise_z * e.xp.random.randn(*e.data.shape).astype(e.dtype)
         if hasattr(self,'latent_fc'):
             e = F.reshape(self.latent_fc(e),(-1,self.latent_c,self.latent_h,self.latent_w))
         for i in range(self.n_resblock):

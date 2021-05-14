@@ -38,6 +38,8 @@ if __name__ == '__main__':
     if not args.model_gen:
         root=os.path.dirname(args.argfile)
         args.model_gen=os.path.join(root,'enc_x{}.npz'.format(args.epoch))
+        if not os.path.isfile(args.model_gen):
+            args.model_gen = args.model_gen.replace('enc_x','gen_')
 
     save_args(args, outdir)
     print(args)
@@ -158,6 +160,7 @@ if __name__ == '__main__':
 
     elapsed_time = time.time() - start
     print ("{} images in {} sec".format(cnt,elapsed_time))
+    exit()
 
 
 
