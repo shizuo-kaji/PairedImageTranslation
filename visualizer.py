@@ -31,6 +31,7 @@ class VisEvaluator(extensions.Evaluator):
         warnings.filterwarnings("ignore", category=UserWarning)
 
     def evaluate(self):
+        domain = ['in','truth','out']
         if self.eval_hook:
             self.eval_hook(self)
 
@@ -42,10 +43,10 @@ class VisEvaluator(extensions.Evaluator):
 
             with chainer.using_config('train', False), chainer.function.no_backprop_mode():
                 x_out = self._targets['dec_y'](self._targets['enc_x'](x_in)) # translated image by NN
-            
+
             if k==0:  # for test dataset, compute some statistics
-                fig = plt.figure(figsize=(9, 6 * len(batch)))
-                gs = gridspec.GridSpec(2* len(batch), 3, wspace=0.1, hspace=0.1)
+                fig = plt.figure(figsize=(12, 6 * len(batch)))
+                gs = gridspec.GridSpec(2* len(batch), 4, wspace=0.1, hspace=0.1)
                 loss_rec_L1 = F.mean_absolute_error(x_out, t_out)
                 loss_rec_L2 = F.mean_squared_error(x_out, t_out)
                 loss_rec_CE = softmax_focalloss(x_out, t_out)
@@ -62,6 +63,7 @@ class VisEvaluator(extensions.Evaluator):
 #                print(imgs.shape,np.min(imgs),np.max(imgs))
                 for j in range(len(imgs)):
                     ax = fig.add_subplot(gs[j+k*len(batch),i])
+                    ax.set_title(dataset+"_"+domain[i], fontsize=8)
                     if(imgs[j].shape[2] == 3): ## RGB
                         ax.imshow(imgs[j], interpolation='none',vmin=0,vmax=1)
                     elif(imgs[j].shape[2] == 4):
@@ -70,6 +72,12 @@ class VisEvaluator(extensions.Evaluator):
                         ax.imshow(imgs[j][:,:,-1], interpolation='none',cmap='gray',vmin=0,vmax=1)
                     ax.set_xticks([])
                     ax.set_yticks([])
+
+            ## difference image
+            diff = (x_out-t_out).data.get().transpose(0, 2, 3, 1)
+            for j in range(len(diff)):
+                ax = fig.add_subplot(gs[j+k*len(batch),3])
+                ax.imshow(diff[j][:,:,0], interpolation='none',cmap='coolwarm',vmin=-0.1,vmax=0.1)
 
         gs.tight_layout(fig)
         plt.savefig(os.path.join(self.vis_out,'count{:0>4}.jpg'.format(self.count)), dpi=200)

@@ -81,9 +81,9 @@ class Dataset(dataset_mixin.DatasetMixin):
     def get_img_path(self, i):
         return(self.dataset[i][0][0])
 
-    def var2img(self,var):
-        if self.clip_B[0] is not None:            
-            return (0.5*(var+1)*(self.clip_B[1]-self.clip_B[0])+self.clip_B[0]).squeeze()
+    def var2img(self,var,clip=(None,None)):
+        if clip[0] is not None:            
+            return (0.5*(var+1)*(clip[1]-clip[0])+clip[0]).squeeze()
         else:
             return(0.5*(1.0+var)*255).squeeze()
     
@@ -159,20 +159,23 @@ class Dataset(dataset_mixin.DatasetMixin):
             x_slice = slice(x_offset, x_offset + W)
         return imgs_in[:,y_slice,x_slice], imgs_out[:,y_slice,x_slice]
     
-    def overwrite_dicom(self,new,fn,salt):
+    def overwrite_dicom(self,new,fn,salt,airvalue=None):
+        if airvalue is None:
+            airvalue = self.clip_B[0]
         ref_dicom = dicom.read_file(fn, force=True)
         dt=ref_dicom.pixel_array.dtype
-        img = np.full(ref_dicom.pixel_array.shape, self.clip_B[0], dtype=np.float32)
+        img = np.full(ref_dicom.pixel_array.shape, airvalue, dtype=np.float32)
         ch,cw = img.shape
         h,w = new.shape
-#        if np.min(img - ref_dicom.RescaleIntercept)<0:
-#            ref_dicom.RescaleIntercept = -1024
         img[np.newaxis,(ch-h)//2:(ch+h)//2,(cw-w)//2:(cw+w)//2] = new
-        if np.min(img - ref_dicom.RescaleIntercept)<0:
-            ref_dicom.RescaleIntercept = -1024
-        img -= ref_dicom.RescaleIntercept
+        # if np.min(img - ref_dicom.RescaleIntercept)<0:
+        #     ref_dicom.RescaleIntercept -= 1024
+        #     img -= ref_dicom.RescaleIntercept
+        ref_dicom.RescaleIntercept = 0
+        ref_dicom.RescaleSlope = 1
+
         img = img.astype(dt)           
-        print("min {}, max {}, intercept {}".format(np.min(img),np.max(img),ref_dicom.RescaleIntercept))
+#        print("min {}, max {}, intercept {}\n".format(np.min(img),np.max(img),ref_dicom.RescaleIntercept))
 #            print(img.shape, img.dtype)
         ref_dicom.PixelData = img.tostring()
         ## UID should be changed for dcm's under different dir

@@ -79,7 +79,7 @@ Typical usage cases should be covered by pixelwise regression.
 
 Let us use an example created by
 ```
-python util/create_shapes.py
+python utility/create_shapes.py
 ```
 We obtain sample images under "shapes" directory and two text files (Method 1) containing the file names of the images.
 
@@ -112,7 +112,7 @@ Note that FC layers are very expensive in terms of GPU memory.
 
 Let us use an example created by
 ```
-python util/create_shapes_sinogram.py
+python utility/create_shapes_sinogram.py
 ```
 It produces sample images of Radon transform and text files ct_reconst_train.txt and ct_reconst_val.txt.
 
@@ -162,7 +162,7 @@ Note that this demo is just to show how to use the code, and we do not aim at tr
 - Download the dcm files from the above URL.
 - Create a training dataset containing pairs of clean images and images with artificial noise.
 ```
-python util/noising.py -n 700 -it dcm -R "CPTAC-SAR/C3N-00843/02-25-2009-92610/629-ARTERIA-66128" -o images > CPTAC-SAR.txt
+python utility/noising.py -n 700 -it dcm -R "CPTAC-SAR/C3N-00843/02-25-2009-92610/629-ARTERIA-66128" -o images > CPTAC-SAR.txt
 ```
 You will get "images/trainA" containing images with noise and "images/trainB" containing clean images.
 Also, you will get a text file "CPTAC-SAR.txt" containing image file names.
@@ -170,7 +170,7 @@ Also, you will get a text file "CPTAC-SAR.txt" containing image file names.
 Name them "CPTAC-SAR_train.txt" and "CPTAC-SAR_val.txt"
 You can do this by:
 ```
-python util/random_split.py dataset/CPTAC-SAR.txt --ratio 0.8 
+python utility/random_split.py dataset/CPTAC-SAR.txt --ratio 0.8 
 ```
 
 - Start training by

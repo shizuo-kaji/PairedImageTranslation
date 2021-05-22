@@ -24,6 +24,7 @@ from arguments import arguments
 from consts import dtypes
 from dataset import Dataset  
 
+#os.environ['OMP_NUM_THREADS'] = '1'
 
 if __name__ == '__main__':
     args = arguments()
@@ -59,8 +60,8 @@ if __name__ == '__main__':
         print("Specify file or dir!")
         exit
         
-#    iterator = chainer.iterators.MultiprocessIterator(dataset, args.batch_size, n_processes=3, repeat=False, shuffle=False)
-    iterator = chainer.iterators.MultithreadIterator(dataset, args.batch_size, n_threads=3, repeat=False, shuffle=False)   ## best performance
+    #iterator = chainer.iterators.MultiprocessIterator(dataset, args.batch_size, n_processes=4, repeat=False, shuffle=False)
+    iterator = chainer.iterators.MultithreadIterator(dataset, args.batch_size, n_threads=3, repeat=False, shuffle=False)
 #    iterator = chainer.iterators.SerialIterator(dataset, args.batch_size,repeat=False, shuffle=False)
 
     if args.ch != len(dataset[0][0]):
@@ -101,6 +102,11 @@ if __name__ == '__main__':
             gen.to_gpu()
         xp = gen.xp
         is_AE = False
+    elif "identity" == args.model_gen:
+        gen = F.identity
+        print("Identity..")
+        xp = np
+        is_AE = False
     else:
         print("Specify a learned model.")
         exit()        
@@ -119,26 +125,29 @@ if __name__ == '__main__':
                 out_v = dec(enc(imgs))
             else:
                 out_v = gen(imgs)
-        if args.gpu >= 0:
-            imgs = xp.asnumpy(imgs.array)
-            out = xp.asnumpy(out_v.array)
-        else:
-            imgs = imgs.array
-            out = out_v.array
+        imgs = imgs.data.get()
+        out = out_v.data.get()
+        # if args.gpu >= 0:
+        #     imgs = xp.asnumpy(imgs.array)
+        #     out = xp.asnumpy(out_v.array)
+        # else:
+        #     imgs = imgs.array
+        #     out = out_v.array
         
         ## output images
         for i in range(len(out)):
             fn = dataset.get_img_path(cnt)
             bfn,ext = os.path.splitext(fn)
-            print("\nProcessing {}".format(fn))
+            print("Processing {}".format(fn))
             if args.class_num>0:
                 write_image((255*np.stack([out[i,2],np.zeros_like(out[i,0]),out[i,1]],axis=0)).astype(np.uint8), os.path.join(outdir,os.path.basename(bfn))+".jpg")
                 new = np.argmax(out[i],axis=0)
 #                print(new.shape)
             else:
-                new = dataset.var2img(out[i])
-            print("raw value: {} -- {}".format(np.min(out[i]),np.max(out[i])))
-            print("image value: {} -- {}, ".format(np.min(new),np.max(new), new.shape))
+                new = dataset.var2img(out[i],args.clipB)
+            if args.vis_freq>0 and cnt%args.vis_freq==0:
+                print("raw value: {} -- {}".format(np.min(out[i]),np.max(out[i])))
+                print("image value: {} -- {}, ".format(np.min(new),np.max(new), new.shape))
             # converted image
             if args.imgtype=="dcm":
                 path = os.path.join(outdir,os.path.basename(fn))
@@ -160,6 +169,7 @@ if __name__ == '__main__':
 
     elapsed_time = time.time() - start
     print ("{} images in {} sec".format(cnt,elapsed_time))
+    iterator.finalize()
     exit()
 
 

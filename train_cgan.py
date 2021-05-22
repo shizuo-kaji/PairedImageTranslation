@@ -226,10 +226,11 @@ def main():
     if args.lr_drop > 0:  ## cosine annealing
         for e in [opt_enc_x,opt_dec_y,opt_dis]:
             trainer.extend(CosineShift(lr_target, args.epoch//args.lr_drop, optimizer=e), trigger=(1, 'epoch'))
+            #trainer.extend(extensions.ExponentialShift(lr_target, 0.33, optimizer=e), trigger=(args.epoch//args.lr_drop, 'epoch'))
     else:
+        decay_end_iter = args.epoch*len(train_iter)
         for e in [opt_enc_x,opt_dec_y,opt_dis]:
-            #trainer.extend(extensions.LinearShift('eta', (1.0,0.0), (decay_start_iter,decay_end_iter), optimizer=e))
-            trainer.extend(extensions.ExponentialShift('lr', 0.33, optimizer=e), trigger=(args.epoch//args.lr_drop, 'epoch'))
+            trainer.extend(extensions.LinearShift(lr_target, (1.0,0.0), (decay_end_iter//2,decay_end_iter), optimizer=e))
 
     # evaluation
     vis_folder = os.path.join(outdir, "vis")
