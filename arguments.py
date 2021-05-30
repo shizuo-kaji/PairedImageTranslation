@@ -6,19 +6,19 @@ import os
 import json,codecs
 
 default_values = {'out': 'result', 'root': 'data', 'btoa': False, 'train': '__train__', 'val': '__test__', 'from_col': [0], 'to_col': [1], 'imgtype': 'jpg', \
-    'crop_width': None, 'crop_height': None, 'grey': None, 'clipA': [None,None], 'clipB': [None,None], 'class_num': 0, \
+    'crop_width': None, 'crop_height': None, 'grey': None, 'clipA': [None,None], 'clipB': [None,None], 'class_num': 0, 'stack': 1, \
     'batch_size': 1, 'epoch': 400, 'gpu': 0, \
     'learning_rate': None, 'learning_rate_gen': 2e-4, 'learning_rate_dis': 1e-4, 'lr_drop': 1, \
     'weight_decay': 1e-7, 'weight_decay_norm': 'l2', \
     'snapinterval': -1, 'display_interval': 100, 'nvis': 3, 'vis_freq': None, 'parameter_statistics': False, \
     'lambda_rec_l1': 10, 'lambda_rec_l2': 0, 'lambda_rec_ce': 0, 'lambda_dis': 1, 'lambda_tv': 0, 'lambda_reg': 0, \
     'lambda_mispair': 0, 'lambda_wgan_gp': 10, 'tv_tau': 1e-3, 'loss_ksize': 1, \
-    'random_translate': 4, 'noise': 0, 'noise_z': 0, \
+    'random_translate': 4, 'random_rotation': 0, 'random_scale': 0, 'noise': 0, 'noise_z': 0, \
     'load_optimizer': False, 'optimizer': 'Adam', \
     'dtype': 'fp32', 'eqconv': False, 'spconv': False, 'senet': False, \
     'dis_activation': 'lrelu', 'dis_out_activation': 'none', 'dis_ksize': 4, 'dis_chs': None, \
     'dis_basech': 64, 'dis_ndown': 3, 'dis_down': 'down', 'dis_sample': 'down', 'dis_jitter': 0.2, 'dis_dropout': None, \
-    'dis_norm': 'batch_aff', 'dis_reg_weighting': 0, 'dis_attention': False, \
+    'dis_norm': 'batch_aff', 'dis_reg_weighting': 0, 'dis_attention': False, 'dis_warmup': -1, \
     'gen_pretrained_encoder': '', 'gen_pretrained_lr_ratio': 0, 'gen_activation': 'relu', 'gen_out_activation': 'tanh', 'gen_chs': None, \
     'gen_ndown': 3, 'gen_basech': 64, 'gen_fc': 0, 'gen_fc_activation': 'relu', 'gen_nblock': 9, 'gen_ksize': 3, \
     'gen_sample': 'none-7', 'gen_down': 'down', 'gen_up': 'unpool', 'gen_dropout': None, 'gen_norm': 'batch_aff', \
@@ -44,6 +44,7 @@ def arguments():
     parser.add_argument('--clipA', '-ca', type=float, nargs=2, help="lower and upper limit for pixel values of images in domain A")
     parser.add_argument('--clipB', '-cb', type=float, nargs=2, help="lower and upper limit for pixel values of images in domain B")
     parser.add_argument('--class_num', '-cn', type=int, help='number of classes for pixelwise classification (only for images in domain B)')
+    parser.add_argument('--stack', type=int, help='number of images in a stack (>1 means 2.5D)')
 
     # training
     parser.add_argument('--batch_size', '-b', type=int, help='Number of images in each mini-batch')
@@ -78,6 +79,8 @@ def arguments():
 
     # data augmentation
     parser.add_argument('--random_translate', '-rt', type=int, help='jitter input images by random translation')
+    parser.add_argument('--random_rotation', '-rr', type=int, help='jitter input images by random rotation (in degree)')
+    parser.add_argument('--random_scale', '-rs', type=float, help='jitter input images by random scaling (in ratio)')
     parser.add_argument('--noise', '-n', type=float, help='strength of noise injection')
     parser.add_argument('--noise_z', '-nz', type=float, help='strength of noise injection for the latent variable')
 
@@ -108,6 +111,7 @@ def arguments():
     parser.add_argument('--dis_reg_weighting', '-dw', type=float, help='regularisation of weighted discriminator. Set 0 to disable weighting')
     parser.add_argument('--dis_wgan', '-wgan', action='store_true',help='WGAN-GP')
     parser.add_argument('--dis_attention', action='store_true',help='attention mechanism for discriminator')
+    parser.add_argument('--dis_warmup', type=int, help='number of warm-up iterations before discriminator starts to learn')
 
     # generator    
     parser.add_argument('--gen_pretrained_encoder', '-gp', type=str, choices=["","vgg","resnet"], help='Use pretrained ResNet/VGG as encoder')

@@ -2,12 +2,14 @@
 
 from PIL import Image
 import numpy as np
-import os,glob
+import os,glob,re
 import random
 
 from chainer.dataset import dataset_mixin
-from chainercv.transforms import resize,random_flip,random_crop
+from chainercv.transforms import resize,random_flip,random_crop,rotate
 from chainercv.utils import read_image,write_image
+from skimage.transform import rescale
+import PIL
 
 try:
     import pydicom as dicom
@@ -16,36 +18,32 @@ except:
 
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, clipA=(None,None), clipB=(None,None), class_num=0, crop=(None,None), imgtype='jpg', random=0, grey=False, BtoA=False, **kwargs):
+    def __init__(self, datalist, DataDir, from_col, to_col, clipA=(None,None), clipB=(None,None), class_num=0, crop=(None,None), imgtype='jpg', random_tr=0, random_rot=0, random_scale=0, stack=1, grey=False, BtoA=False, **kwargs):
         self.dataset = []
         self.clip_A = clipA
         self.clip_B = clipB
+        num = lambda val : int(re.sub("\\D", "", val+"0"))
 
         self.class_num=class_num
-        if datalist == '__train__':
+        if datalist == '__train__' or datalist == '__test__':
+            phase = 'train' if datalist == '__train__' else 'test'
             dirlist = ["."]
-            for f in os.listdir(os.path.join(DataDir,"trainA")):
-                if os.path.isdir(os.path.join(DataDir,"trainA",f)):
+            for f in os.listdir(os.path.join(DataDir,phase+"A")):
+                if os.path.isdir(os.path.join(DataDir,phase+"A",f)):
                     dirlist.append(f)
             for dirname in dirlist:
-                for fn in glob.glob(os.path.join(DataDir,"trainA", dirname, "*.{}".format(imgtype))):
-                    fn2 = fn.replace('trainA','trainB')
+                fnlist = sorted(glob.glob(os.path.join(DataDir,phase+"A", dirname, "*.{}".format(imgtype))),key=num)
+                n = len(fnlist)
+                for i in range(n-stack):
+                    L1, L2 = [], []
+                    for j in range(stack):
+                        fn = fnlist[i+j]
+                        L1.append(fn)
+                        L2.append(fn.replace(phase+'A',phase+'B'))
                     if BtoA:
-                        self.dataset.append([[fn2],[fn]])
+                        self.dataset.append([L2,L1])
                     else:
-                        self.dataset.append([[fn],[fn2]])
-        elif datalist == '__test__':
-            dirlist = ["."]
-            for f in os.listdir(os.path.join(DataDir,"testA")):
-                if os.path.isdir(os.path.join(DataDir,"testA", f)):
-                    dirlist.append(f)
-            for dirname in dirlist:
-                for fn in glob.glob(os.path.join(DataDir,"testA", dirname, "*.{}".format(imgtype))):
-                    fn2 = fn.replace('testA','testB')
-                    if BtoA:
-                        self.dataset.append([[fn2],[fn]])
-                    else:
-                        self.dataset.append([[fn],[fn2]])
+                        self.dataset.append([L1,L2])
         else:
             ## an input/output image can consist of multiple images; they are stacked as channels
             with open(datalist) as input:
@@ -71,9 +69,12 @@ class Dataset(dataset_mixin.DatasetMixin):
 
         self.crop = crop
         self.grey = grey
-        self.random = random
+        self.random_tr = random_tr
+        self.random_rot = random_rot
+        self.random_scale = random_scale
         print("Cropped size: ",self.crop, "ClipA: ",self.clip_A, "ClipB: ",self.clip_B)
         print("loaded {} images".format(len(self.dataset)))
+        print(self.dataset)
     
     def __len__(self):
         return len(self.dataset)
@@ -139,24 +140,34 @@ class Dataset(dataset_mixin.DatasetMixin):
         else:
             imgs_out = self.stack_imgs(ol, onehot=(self.class_num>0), clip=self.clip_B)
 #        print(np.min(imgs_in),np.max(imgs_in),np.min(imgs_out),np.max(imgs_out))
-        H = self.crop[0] if self.crop[0] else 16*((imgs_in.shape[1]-2*self.random)//16)
-        W = self.crop[1] if self.crop[1] else 16*((imgs_in.shape[2]-2*self.random)//16)
-        if self.random: # random crop/flip
+        if self.random_scale>0 and self.crop[0] is not None:
+            r = np.random.uniform( max(self.crop[0]/imgs_in.shape[1], self.crop[1]/imgs_in.shape[2], 1-self.random_scale),1+self.random_scale)
+            imgs_in = resize(imgs_in, (int(np.ceil(imgs_in.shape[1]*r)),int(np.ceil(imgs_in.shape[2]*r))), interpolation=PIL.Image.LANCZOS)
+            imgs_out = resize(imgs_out, (int(np.ceil(imgs_out.shape[1]*r)),int(np.ceil(imgs_out.shape[2]*r))), interpolation=PIL.Image.LANCZOS)
+        if self.random_rot>0:
+            r = np.random.uniform(-self.random_rot,self.random_rot)
+            imgs_in = rotate(imgs_in, r,expand=False, fill=-1)
+            imgs_out = rotate(imgs_out, r,expand=False, fill=-1)
+
+        H = self.crop[0] if self.crop[0] else 16*((imgs_in.shape[1]-2*self.random_tr)//16)
+        W = self.crop[1] if self.crop[1] else 16*((imgs_in.shape[2]-2*self.random_tr)//16)
+        if self.random_tr: # random crop/flip
             if random.choice([True, False]):
                 imgs_in = imgs_in[:, :, ::-1]
                 imgs_out = imgs_out[:, :, ::-1]
 #            if random.choice([True, False]):
 #                imgs_in = imgs_in[:, ::-1, :]
 #                imgs_out = imgs_out[:, ::-1, :]
-            y_offset = random.randint((imgs_in.shape[1]-H)//2-self.random, (imgs_in.shape[1]-H)//2+self.random)
+            y_offset = random.randint( max(0,(imgs_in.shape[1]-H)//2-self.random_tr), min((imgs_in.shape[1]-H)//2+self.random_tr,imgs_in.shape[1]-H) )
             y_slice = slice(y_offset, y_offset + H)
-            x_offset = random.randint((imgs_in.shape[2]-W)//2-self.random, (imgs_in.shape[2]-W)//2+self.random)
+            x_offset = random.randint( max(0,(imgs_in.shape[2]-W)//2-self.random_tr), min((imgs_in.shape[2]-W)//2+self.random_tr,imgs_in.shape[2]-W) )
             x_slice = slice(x_offset, x_offset + W)
         else: # centre crop
             y_offset = (imgs_in.shape[1] - H) // 2
             x_offset = (imgs_in.shape[2] - W) // 2
             y_slice = slice(y_offset, y_offset + H)
             x_slice = slice(x_offset, x_offset + W)
+        #print(imgs_in.shape, x_offset, imgs_in[:,y_slice,x_slice].shape, imgs_out[:,y_slice,x_slice].shape)
         return imgs_in[:,y_slice,x_slice], imgs_out[:,y_slice,x_slice]
     
     def overwrite_dicom(self,new,fn,salt,airvalue=None):

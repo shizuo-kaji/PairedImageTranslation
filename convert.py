@@ -29,7 +29,7 @@ from dataset import Dataset
 if __name__ == '__main__':
     args = arguments()
     args.random = 0 ## necessary to infer crop size
-    outdir = os.path.join(args.out, dt.now().strftime('out_%m%d_%H%M'))
+    outdir = os.path.join(args.out, dt.now().strftime('out_%Y%m%d_%H%M'))
 
     if args.gpu >= 0:
         cuda.get_device_from_id(args.gpu).use()
@@ -138,37 +138,44 @@ if __name__ == '__main__':
         for i in range(len(out)):
             fn = dataset.get_img_path(cnt)
             bfn,ext = os.path.splitext(fn)
+            bfn = os.path.basename(bfn)
+            relfn = os.path.relpath(fn,args.root)
+            os.makedirs(os.path.join(outdir, os.path.dirname(relfn)), exist_ok=True)
             print("Processing {}".format(fn))
             if args.class_num>0:
-                write_image((255*np.stack([out[i,2],np.zeros_like(out[i,0]),out[i,1]],axis=0)).astype(np.uint8), os.path.join(outdir,os.path.basename(bfn))+".jpg")
+                #write_image((255*np.stack([out[i,2],np.zeros_like(out[i,0]),out[i,1]],axis=0)).astype(np.uint8), os.path.join(outdir,bfn)+".jpg")
                 new = np.argmax(out[i],axis=0)
+                airvalue = 0
 #                print(new.shape)
             else:
+                airvalue = None
                 new = dataset.var2img(out[i],args.clipB)
             if args.vis_freq>0 and cnt%args.vis_freq==0:
                 print("raw value: {} -- {}".format(np.min(out[i]),np.max(out[i])))
                 print("image value: {} -- {}, ".format(np.min(new),np.max(new), new.shape))
             # converted image
             if args.imgtype=="dcm":
-                path = os.path.join(outdir,os.path.basename(fn))
-                ref_dicom = dataset.overwrite_dicom(new,fn,salt)
+                path = os.path.join(outdir,relfn)
+                print(path)
+                ref_dicom = dataset.overwrite_dicom(new,fn,salt,airvalue=airvalue)
                 ref_dicom.save_as(path)
             elif args.imgtype=="npy":
-                path = os.path.join(outdir,os.path.basename(bfn))
+                path = os.path.join(outdir,bfn)
                 np.save(path,new)
             elif args.imgtype=="txt":
-                path = os.path.join(outdir,os.path.basename(bfn))+".txt"
+                path = os.path.join(outdir,bfn)+".txt"
                 np.savetxt(path,new,fmt="%d")
             else:
             # save image
-                path = os.path.join(outdir,os.path.basename(bfn))+".jpg"
+                path = os.path.join(outdir,bfn)+".jpg"
                 write_image(new, path)
 
             cnt += 1
         ####
 
     elapsed_time = time.time() - start
-    print ("{} images in {} sec".format(cnt,elapsed_time))
+    print ("\n{} images in {} sec".format(cnt,elapsed_time))
+    print ("Output in {}".format(outdir))
     iterator.finalize()
     exit()
 

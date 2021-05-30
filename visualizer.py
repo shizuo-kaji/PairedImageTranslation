@@ -11,6 +11,7 @@ import chainer.functions as F
 from chainer.training import extensions
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
+from matplotlib import colors
 import warnings
 from updater import softmax_focalloss
 
@@ -55,19 +56,23 @@ class VisEvaluator(extensions.Evaluator):
             ## iterate over batch
             for i, var in enumerate([x_in, t_out, x_out]):
                 if i % 3 != 0 and self.args.class_num>0: # t_out, x_out
-                    imgs = var2unit_img(var,0,1)
-                    imgs[:,:,:,0] = 0 # class 0 => black  ###### TODO
-                    imgs = np.roll(imgs,1,axis=3)[:,:,:,:3]  ## R0B, show only 3 classes (-1,0,1)
+                    imgs = var2unit_img(var,0,1) # softmax
+                    #imgs[:,:,:,0] = 0 # class 0 => black  ###### TODO
+                    #imgs = np.roll(imgs,1,axis=3)[:,:,:,:3]  ## R0B, show only 3 classes (-1,0,1)
                 else:
-                    imgs = var2unit_img(var)
+                    imgs = var2unit_img(var) # tanh
 #                print(imgs.shape,np.min(imgs),np.max(imgs))
                 for j in range(len(imgs)):
                     ax = fig.add_subplot(gs[j+k*len(batch),i])
                     ax.set_title(dataset+"_"+domain[i], fontsize=8)
                     if(imgs[j].shape[2] == 3): ## RGB
                         ax.imshow(imgs[j], interpolation='none',vmin=0,vmax=1)
-                    elif(imgs[j].shape[2] == 4):
-                        ax.imshow(imgs[j][:,:,1:], interpolation='none',vmin=0,vmax=1)
+                    elif(imgs[j].shape[2] >= 4): ## categorical
+                        cols = ['k','r','g','b','c','m','y']*5
+                        cmap = colors.ListedColormap(cols)
+                        im = np.argmax(imgs[j], axis=2)
+                        norm = colors.BoundaryNorm(list(range(len(cols)+1)), cmap.N)
+                        ax.imshow(im, interpolation='none', cmap=cmap, norm=norm)
                     else:
                         ax.imshow(imgs[j][:,:,-1], interpolation='none',cmap='gray',vmin=0,vmax=1)
                     ax.set_xticks([])

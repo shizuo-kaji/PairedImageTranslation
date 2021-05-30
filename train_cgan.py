@@ -35,7 +35,7 @@ def plot_log(f,a,summary):
 
 def main():
     args = arguments()
-    outdir = os.path.join(args.out, dt.now().strftime('%m%d_%H%M')+"_cgan")
+    outdir = os.path.join(args.out, dt.now().strftime('%Y%m%d_%H%M')+"_cgan")
 
 #    chainer.config.type_check = False
     chainer.config.autotune = True
@@ -48,8 +48,8 @@ def main():
         chainer.cuda.get_device(args.gpu).use()
 
     ## dataset preparation
-    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
-    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random=args.random_translate, grey=args.grey, BtoA=args.btoa)
+    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random_tr=args.random_translate, random_rot=args.random_rotation, random_scale=args.random_scale, grey=args.grey, BtoA=args.btoa)
+    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, grey=args.grey, BtoA=args.btoa)
     args.crop_height,args.crop_width = train_d.crop
     if(len(train_d)==0):
         print("No images found!")
@@ -186,7 +186,7 @@ def main():
         trainer.extend(extensions.dump_graph('dec_y/loss_L2', out_name='gen.dot'))
     elif args.lambda_rec_ce > 0:
         trainer.extend(extensions.dump_graph('dec_y/loss_CE', out_name='gen.dot'))
-    if args.lambda_dis>0:
+    if args.lambda_dis>0 and args.dis_warmup < 0:
         trainer.extend(extensions.dump_graph('dis/loss_real', out_name='dis.dot'))
 
     ## log outputs
@@ -228,7 +228,7 @@ def main():
             trainer.extend(CosineShift(lr_target, args.epoch//args.lr_drop, optimizer=e), trigger=(1, 'epoch'))
             #trainer.extend(extensions.ExponentialShift(lr_target, 0.33, optimizer=e), trigger=(args.epoch//args.lr_drop, 'epoch'))
     else:
-        decay_end_iter = args.epoch*len(train_iter)
+        decay_end_iter = args.epoch*len(train_d)
         for e in [opt_enc_x,opt_dec_y,opt_dis]:
             trainer.extend(extensions.LinearShift(lr_target, (1.0,0.0), (decay_end_iter//2,decay_end_iter), optimizer=e))
 

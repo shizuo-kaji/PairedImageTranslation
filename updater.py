@@ -136,9 +136,9 @@ class Updater(chainer.training.StandardUpdater):
             loss_tv = total_variation2(x_out, self.args.tv_tau)
             loss_gen = loss_gen + self.args.lambda_tv * loss_tv
             chainer.report({'loss_tv': loss_tv}, self.dec_y)
- 
+
         # Adversarial loss
-        if self.args.lambda_dis>0:
+        if self.args.lambda_dis>0 and self.iteration >= self.args.dis_warmup:
             y_fake = self.dis(x_in_out)
             if self.args.dis_wgan:
                 loss_adv = -F.average(y_fake)
@@ -157,7 +157,7 @@ class Updater(chainer.training.StandardUpdater):
         opt_dec_y.update(loss=loss_gen)
 
         ## discriminator
-        if self.args.lambda_dis>0:
+        if self.args.lambda_dis>0 and self.iteration >= self.args.dis_warmup:
             x_in_out_copy = self._buffer.query(x_in_out.array)
             if self.args.dis_wgan: ## synthesised -, real +
                 eps = self.xp.random.uniform(0, 1, size=len(batch)).astype(self.xp.float32)[:, None, None, None]
