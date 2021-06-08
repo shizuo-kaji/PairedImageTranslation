@@ -126,7 +126,7 @@ if __name__ == '__main__':
             x_out = F.softmax(x_out)
         if args.gpu >= 0:
             imgs.to_cpu()
-            out.to_cpu() 
+            x_out.to_cpu() 
         imgs = imgs.data
         out = x_out.data[args.stack//2::args.stack]        ## use the only middle slice in the stack
 
