@@ -18,14 +18,22 @@ def add_noise(h, sigma):
         return h
 
 ## multi-class focal loss
-def softmax_focalloss(x, t, gamma=2, eps=1e-7):
+def softmax_focalloss(x, t, gamma=2, eps=1e-7, class_weight=1.0):
 #        p = F.clip(F.softmax(x), x_min=eps, x_max=1-eps)
     p = F.clip(x, x_min=eps, x_max=1-eps)  ## we assume the input is already applied softmax
 #        print(p.shape, t.shape)
 #        print(p.shape,self.xp.eye(class_num)[t[:,0,:,:]].shape)
     ## label smoothing
     q = -F.clip(t, x_min=eps, x_max=1-eps) * F.log(p)
-    return F.average(q * ((1 - p) ** gamma))
+    return F.average(class_weight * q * ((1 - p) ** gamma))
+
+## channel weighted error
+def weighted_error(x,t,exponent=2,class_weight=1):
+    if exponent % 2 == 0:
+        diff = (x-t)**exponent
+    else:
+        diff = F.absolute(x-t)**exponent
+    return(F.average(class_weight * diff))
 
 def total_variation(x,tau=1e-6):
     xp = cuda.get_array_module(x.data)
@@ -54,7 +62,7 @@ class ImagePool():
             return images
         return_images = []
         xp = cuda.get_array_module(images)
-        for image in images:
+        for image in images:   # iterate over image batch
             image = xp.expand_dims(image, axis=0)
             if self.num_imgs < self.pool_size:
                 self.num_imgs = self.num_imgs + 1
@@ -79,6 +87,10 @@ class Updater(chainer.training.StandardUpdater):
         self.args = params['args']
         self.xp = self.enc_x.xp
         self._buffer = ImagePool(50 * self.args.batch_size)
+        if self.args.class_weight is not None:
+            self.class_weight = self.xp.array(self.args.class_weight).reshape(1,-1,1,1)
+        else:
+            self.class_weight = 1.0
 
     def loss_func_comp(self,y, val, noise=0, lambda_reg=1.0):
         xp = cuda.get_array_module(y.data)
@@ -107,7 +119,14 @@ class Updater(chainer.training.StandardUpdater):
         x_in = Variable(x_in)
         x_z = self.enc_x(add_noise(x_in, sigma=self.args.noise))
         x_out = self.dec_y(x_z)
-        x_in_out = F.concat([x_in,x_out])
+
+        ## unfold stack and apply softmax
+        if self.args.class_num>0 and self.args.stack>0:
+            #x_out = F.concat([F.softmax(x_out[:,(st*self.args.class_num):((st+1)*self.args.class_num)]) for st in range(self.args.stack)])
+            x_in = x_in.reshape(x_in.shape[0]*self.args.stack,x_in.shape[1]//self.args.stack,x_in.shape[2],x_in.shape[3])
+            x_out = F.softmax(x_out.reshape(x_out.shape[0]*self.args.stack,x_out.shape[1]//self.args.stack,x_out.shape[2],x_out.shape[3]))
+            t_out = t_out.reshape(t_out.shape[0]*self.args.stack,t_out.shape[1]//self.args.stack,t_out.shape[2],t_out.shape[3])
+
 #        print(x_in.shape,x_out.shape, t_out.shape)
 
         loss_gen=0
@@ -117,19 +136,23 @@ class Updater(chainer.training.StandardUpdater):
             loss_gen = loss_gen + self.args.lambda_reg * loss_reg_enc_x
             chainer.report({'loss_reg': loss_reg_enc_x}, self.enc_x)
 
+        if self.args.lambda_rec_ce>0:
+            loss_rec_ce = softmax_focalloss(x_out, t_out, gamma=self.args.focal_gamma, class_weight=self.class_weight)
+            # for st in range(self.args.stack):
+            #     loss_rec_ce += softmax_focalloss(x_out[:,(st*self.args.stack):((st+1)*self.args.stack)], t_out[:,(st*self.args.stack):((st+1)*self.args.stack)])
+            loss_gen = loss_gen + self.args.lambda_rec_ce*loss_rec_ce
+            chainer.report({'loss_CE': loss_rec_ce}, self.dec_y)
         # reconstruction error
         if self.args.lambda_rec_l1>0:
-            loss_rec_l1 = F.mean_absolute_error(x_out, t_out)
+            loss_rec_l1 = weighted_error(x_out, t_out,exponent=1,class_weight=self.class_weight)
+            #loss_rec_l1 = F.mean_absolute_error(x_out, t_out)
             loss_gen = loss_gen + self.args.lambda_rec_l1*loss_rec_l1       
             chainer.report({'loss_L1': loss_rec_l1}, self.dec_y)
         if self.args.lambda_rec_l2>0:
-            loss_rec_l2 = F.mean_squared_error(x_out, t_out)
+            loss_rec_l2 = weighted_error(x_out, t_out,exponent=2,class_weight=self.class_weight)
+            #loss_rec_l2 = F.mean_squared_error(x_out, t_out)
             loss_gen = loss_gen + self.args.lambda_rec_l2*loss_rec_l2
             chainer.report({'loss_L2': loss_rec_l2}, self.dec_y)
-        if self.args.lambda_rec_ce>0:
-            loss_rec_ce = softmax_focalloss(x_out, t_out)
-            loss_gen = loss_gen + self.args.lambda_rec_ce*loss_rec_ce
-            chainer.report({'loss_CE': loss_rec_ce}, self.dec_y)
 
         # total variation
         if self.args.lambda_tv > 0:
@@ -139,6 +162,14 @@ class Updater(chainer.training.StandardUpdater):
 
         # Adversarial loss
         if self.args.lambda_dis>0 and self.iteration >= self.args.dis_warmup:
+            # stack again
+            if self.args.class_num>0 and self.args.stack>0:
+                #x_out = F.concat([F.softmax(x_out[:,(st*self.args.class_num):((st+1)*self.args.class_num)]) for st in range(self.args.stack)])
+                x_in = x_in.reshape(x_in.shape[0]//self.args.stack,x_in.shape[1]*self.args.stack,x_in.shape[2],x_in.shape[3])
+                x_out = x_out.reshape(x_out.shape[0]//self.args.stack,x_out.shape[1]*self.args.stack,x_out.shape[2],x_out.shape[3])
+                t_out = t_out.reshape(t_out.shape[0]//self.args.stack,t_out.shape[1]*self.args.stack,t_out.shape[2],t_out.shape[3])
+
+            x_in_out = F.concat([x_in,x_out])
             y_fake = self.dis(x_in_out)
             if self.args.dis_wgan:
                 loss_adv = -F.average(y_fake)
@@ -174,9 +205,9 @@ class Updater(chainer.training.StandardUpdater):
                 loss_real = self.loss_func_comp(self.dis(F.concat([x_in, t_out])),1.0,self.args.dis_jitter)
                 loss_fake = self.loss_func_comp(self.dis(x_in_out_copy),0.0,self.args.dis_jitter)
                 ## mis-matched input-output pair should be discriminated as fake
-                if self._buffer.num_imgs > 40 and self.args.lambda_mispair>0:
+                if self._buffer.num_imgs > 40 and self.args.lambda_mispair>0: 
                     f_in = self.xp.concatenate(random.sample(self._buffer.images, len(x_in)))
-                    f_in = Variable(f_in[:,:x_in.shape[1],:,:])
+                    f_in = Variable(f_in[:,:x_in.shape[1],:,:])  # extract the first x_in channels of the concatenated [x_in,x_out]
                     loss_mispair = self.loss_func_comp(self.dis(F.concat([f_in,t_out])),0.0,self.args.dis_jitter)
                     chainer.report({'loss_mispair': loss_mispair}, self.dis)
                 else:

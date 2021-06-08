@@ -48,17 +48,11 @@ if __name__ == '__main__':
     chainer.config.dtype = dtypes[args.dtype]
 
     ## load images
-    if args.val=="__test__":
-        print("Load Dataset from directory: {}".format(args.root))
-        with open(os.path.join(args.out,"filenames.txt"),'w') as output:
-            for file in glob.glob(os.path.join(args.root,"**/*.{}".format(args.imgtype)), recursive=True):
-                output.write('{}\n'.format(file))
-        dataset = Dataset(os.path.join(args.out,"filenames.txt"), "", [0], [0], clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, random=0, grey=args.grey, BtoA=args.btoa)
-    elif args.val:
-        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, random=0, grey=args.grey, BtoA=args.btoa)
+    if os.path.isfile(args.val):
+        dataset = Dataset(args.val, args.root, args.from_col, args.from_col, clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, stack=args.stack, grey=args.grey, BtoA=args.btoa)
     else:
-        print("Specify file or dir!")
-        exit
+        print("Load Dataset from directory: {}".format(args.root))
+        dataset = Dataset('__convert__', args.root, [0], [0], clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, stack=args.stack, grey=args.grey, BtoA=args.btoa)
         
     #iterator = chainer.iterators.MultiprocessIterator(dataset, args.batch_size, n_processes=4, repeat=False, shuffle=False)
     iterator = chainer.iterators.MultithreadIterator(dataset, args.batch_size, n_threads=3, repeat=False, shuffle=False)
@@ -122,18 +116,20 @@ if __name__ == '__main__':
         imgs = Variable(x_in)
         with chainer.using_config('train', False), chainer.function.no_backprop_mode():
             if is_AE:
-                out_v = dec(enc(imgs))
+                x_out = dec(enc(imgs))
             else:
-                out_v = gen(imgs)
-        imgs = imgs.data.get()
-        out = out_v.data.get()
-        # if args.gpu >= 0:
-        #     imgs = xp.asnumpy(imgs.array)
-        #     out = xp.asnumpy(out_v.array)
-        # else:
-        #     imgs = imgs.array
-        #     out = out_v.array
-        
+                x_out = gen(imgs)
+        ## unfold stack and apply softmax
+        if args.stack>0:
+            x_out = x_out.reshape(x_out.shape[0]*args.stack,x_out.shape[1]//args.stack,x_out.shape[2],x_out.shape[3])
+        if args.class_num>0:
+            x_out = F.softmax(x_out)
+        if args.gpu >= 0:
+            imgs.to_cpu()
+            out.to_cpu() 
+        imgs = imgs.data
+        out = x_out.data[args.stack//2::args.stack]        ## use the only middle slice in the stack
+
         ## output images
         for i in range(len(out)):
             fn = dataset.get_img_path(cnt)
@@ -142,7 +138,7 @@ if __name__ == '__main__':
             relfn = os.path.relpath(fn,args.root)
             os.makedirs(os.path.join(outdir, os.path.dirname(relfn)), exist_ok=True)
             print("Processing {}".format(fn))
-            if args.class_num>0:
+            if args.class_num>0:  ## TODO: stacked
                 #write_image((255*np.stack([out[i,2],np.zeros_like(out[i,0]),out[i,1]],axis=0)).astype(np.uint8), os.path.join(outdir,bfn)+".jpg")
                 new = np.argmax(out[i],axis=0)
                 airvalue = 0
@@ -155,7 +151,7 @@ if __name__ == '__main__':
                 print("image value: {} -- {}, ".format(np.min(new),np.max(new), new.shape))
             # converted image
             if args.imgtype=="dcm":
-                path = os.path.join(outdir,relfn)
+                path = os.path.join(outdir,relfn) ## preserve directory structures
                 print(path)
                 ref_dicom = dataset.overwrite_dicom(new,fn,salt,airvalue=airvalue)
                 ref_dicom.save_as(path)

@@ -4,8 +4,7 @@
 # By Shizuo Kaji
 
 from __future__ import print_function
-import argparse
-import os
+import os,sys
 from datetime import datetime as dt
 import numpy as np
 
@@ -48,8 +47,8 @@ def main():
         chainer.cuda.get_device(args.gpu).use()
 
     ## dataset preparation
-    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random_tr=args.random_translate, random_rot=args.random_rotation, random_scale=args.random_scale, grey=args.grey, BtoA=args.btoa)
-    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, grey=args.grey, BtoA=args.btoa)
+    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random_tr=args.random_translate, random_rot=args.random_rotation, random_scale=args.random_scale, stack=args.stack, grey=args.grey, BtoA=args.btoa)
+    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, stack=args.stack, grey=args.grey, BtoA=args.btoa)
     args.crop_height,args.crop_width = train_d.crop
     if(len(train_d)==0):
         print("No images found!")
@@ -246,6 +245,8 @@ def main():
     # Run the training
     print("\nresults are saved under: ",outdir)
     save_args(args, outdir)
+    with open(os.path.join(outdir,"args.txt"), 'w') as fh:
+        fh.write(" ".join(sys.argv))
     trainer.run()
 
 if __name__ == '__main__':

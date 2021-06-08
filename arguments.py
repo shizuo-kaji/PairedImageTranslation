@@ -6,7 +6,7 @@ import os
 import json,codecs
 
 default_values = {'out': 'result', 'root': 'data', 'btoa': False, 'train': '__train__', 'val': '__test__', 'from_col': [0], 'to_col': [1], 'imgtype': 'jpg', \
-    'crop_width': None, 'crop_height': None, 'grey': None, 'clipA': [None,None], 'clipB': [None,None], 'class_num': 0, 'stack': 1, \
+    'crop_width': None, 'crop_height': None, 'grey': None, 'clipA': [None,None], 'clipB': [None,None], 'class_num': 0, 'class_weight': None, 'focal_gamma': 2, 'stack': 1, \
     'batch_size': 1, 'epoch': 400, 'gpu': 0, \
     'learning_rate': None, 'learning_rate_gen': 2e-4, 'learning_rate_dis': 1e-4, 'lr_drop': 1, \
     'weight_decay': 1e-7, 'weight_decay_norm': 'l2', \
@@ -44,6 +44,7 @@ def arguments():
     parser.add_argument('--clipA', '-ca', type=float, nargs=2, help="lower and upper limit for pixel values of images in domain A")
     parser.add_argument('--clipB', '-cb', type=float, nargs=2, help="lower and upper limit for pixel values of images in domain B")
     parser.add_argument('--class_num', '-cn', type=int, help='number of classes for pixelwise classification (only for images in domain B)')
+    parser.add_argument('--class_weight', type=float, nargs="*", help='weight for each class for pixelwise classification (only for images in domain B)')
     parser.add_argument('--stack', type=int, help='number of images in a stack (>1 means 2.5D)')
 
     # training
@@ -75,6 +76,7 @@ def arguments():
     parser.add_argument('--lambda_mispair', '-lm', type=float, help='weight for discriminator rejecting mis-matched (real,real) pairs')
     parser.add_argument('--lambda_wgan_gp', '-lwgp', type=float, help='lambda for the gradient penalty for WGAN')
     parser.add_argument('--tv_tau', '-tt', type=float, help='smoothing parameter for total variation')
+    parser.add_argument('--focal_gamma', '-fg', type=float, help='gamma for the focal loss')
     parser.add_argument('--loss_ksize', '-lk', type=int, help='take average pooling of this kernel size before computing L1 and L2 losses')
 
     # data augmentation
@@ -146,11 +148,11 @@ def arguments():
             larg = json.load(f)
     else:
         larg = []
-    for x in default_values:
+    for x in vars(args):
         if getattr(args, x) is None:
             if x in larg:
                 setattr(args, x, larg[x])
-            else:
+            elif x in default_values:
                 setattr(args, x, default_values[x])
 
     if args.learning_rate:
@@ -186,8 +188,8 @@ def arguments():
         exit()
 
     if args.class_num>0:
-        args.gen_out_activation='softmax'
-        print("the last activation is set to softmax for classification.")
+        args.gen_out_activation='none'
+        print("the last activation is set to stack-wise softmax for point-wise classification.")
         if args.out_ch is None:
             args.out_ch = args.class_num
 

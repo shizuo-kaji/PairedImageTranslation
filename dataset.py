@@ -22,24 +22,33 @@ class Dataset(dataset_mixin.DatasetMixin):
         self.dataset = []
         self.clip_A = clipA
         self.clip_B = clipB
+        self.stack = stack
         num = lambda val : int(re.sub("\\D", "", val+"0"))
 
         self.class_num=class_num
-        if datalist == '__train__' or datalist == '__test__':
-            phase = 'train' if datalist == '__train__' else 'test'
+        if datalist == '__convert__':
+            phaseA, phaseB = '', ''  # convert.py
+        elif datalist == '__train__':
+            phaseA, phaseB = 'trainA', 'trainB'
+        elif datalist == '__test__':
+            phaseA, phaseB = 'testA', 'testB'
+        else:
+            phaseA, phaseB  = None, None
+
+        if phaseA is not None:
             dirlist = ["."]
-            for f in os.listdir(os.path.join(DataDir,phase+"A")):
-                if os.path.isdir(os.path.join(DataDir,phase+"A",f)):
+            for f in os.listdir(os.path.join(DataDir,phaseA)):
+                if os.path.isdir(os.path.join(DataDir,phaseA,f)):
                     dirlist.append(f)
             for dirname in dirlist:
-                fnlist = sorted(glob.glob(os.path.join(DataDir,phase+"A", dirname, "*.{}".format(imgtype))),key=num)
+                fnlist = sorted(glob.glob(os.path.join(DataDir,phaseA, dirname, "*.{}".format(imgtype))),key=num)
                 n = len(fnlist)
-                for i in range(n-stack):
+                for i in range(n-stack+1):
                     L1, L2 = [], []
                     for j in range(stack):
                         fn = fnlist[i+j]
                         L1.append(fn)
-                        L2.append(fn.replace(phase+'A',phase+'B'))
+                        L2.append(fn.replace(phaseA,phaseB))
                     if BtoA:
                         self.dataset.append([L2,L1])
                     else:
@@ -74,13 +83,13 @@ class Dataset(dataset_mixin.DatasetMixin):
         self.random_scale = random_scale
         print("Cropped size: ",self.crop, "ClipA: ",self.clip_A, "ClipB: ",self.clip_B)
         print("loaded {} images".format(len(self.dataset)))
-        print(self.dataset)
+        #print(self.dataset)
     
     def __len__(self):
         return len(self.dataset)
 
     def get_img_path(self, i):
-        return(self.dataset[i][0][0])
+        return(self.dataset[i][0][self.stack//2]) # filename of the middle slice
 
     def var2img(self,var,clip=(None,None)):
         if clip[0] is not None:            
@@ -119,12 +128,14 @@ class Dataset(dataset_mixin.DatasetMixin):
                         img_in = resize(img_in, (int(self.crop[1]/img_in.shape[2]*img_in.shape[1]), self.crop[1]))
                     else:
                         img_in = resize(img_in, (self.crop[0], int(self.crop[0]/img_in.shape[1]*img_in.shape[2])))
+            if onehot>0:
+                img_in = np.eye(self.class_num)[img_in[0].astype(np.uint64)].transpose((2,0,1))
             imgs_in.append(img_in)
 
         imgs_in = np.concatenate(imgs_in, axis=0)
     #    print(imgs_in.shape)
         if onehot>0:
-            return(np.eye(self.class_num)[imgs_in[0].astype(np.uint64)].astype(np.float32).transpose((2,0,1)))
+            return(imgs_in.astype(np.float32))
         else:
             ## clip and normalise to [-1,1]
             if clip[0] is not None:
@@ -146,8 +157,9 @@ class Dataset(dataset_mixin.DatasetMixin):
             imgs_out = resize(imgs_out, (int(np.ceil(imgs_out.shape[1]*r)),int(np.ceil(imgs_out.shape[2]*r))), interpolation=PIL.Image.LANCZOS)
         if self.random_rot>0:
             r = np.random.uniform(-self.random_rot,self.random_rot)
-            imgs_in = rotate(imgs_in, r,expand=False, fill=-1)
-            imgs_out = rotate(imgs_out, r,expand=False, fill=-1)
+            imgs_in = rotate(imgs_in, r,expand=False, fill=(-1,-1,-1,-1))
+            nullval = 0 if (self.class_num>0) else (-1,-1,-1,-1)
+            imgs_out = rotate(imgs_out, r,expand=False, fill=nullval)
 
         H = self.crop[0] if self.crop[0] else 16*((imgs_in.shape[1]-2*self.random_tr)//16)
         W = self.crop[1] if self.crop[1] else 16*((imgs_in.shape[2]-2*self.random_tr)//16)
