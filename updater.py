@@ -27,6 +27,14 @@ def softmax_focalloss(x, t, gamma=2, eps=1e-7, class_weight=1.0):
     q = -F.clip(t, x_min=eps, x_max=1-eps) * F.log(p)
     return F.average(class_weight * q * ((1 - p) ** gamma))
 
+## channel-wise DICE loss
+def dice(x, t, eps=1e-7, class_weight=1.0):
+    x1 = x.transpose(1,0,2,3).reshape(x.shape[1],-1) # C x rest
+    t1 = t.transpose(1,0,2,3).reshape(t.shape[1],-1) # C x rest
+    res = F.sum(x1 * t1, axis=1) * class_weight
+    return( -F.sum(res / F.sum(x1*x1 + t1*t1+eps, axis=1)) )
+
+
 ## channel weighted error
 def weighted_error(x,t,exponent=2,class_weight=1):
     if exponent % 2 == 0:
@@ -135,6 +143,11 @@ class Updater(chainer.training.StandardUpdater):
             loss_reg_enc_x = losses.loss_func_reg(x_z[-1],'l2') 
             loss_gen = loss_gen + self.args.lambda_reg * loss_reg_enc_x
             chainer.report({'loss_reg': loss_reg_enc_x}, self.enc_x)
+
+        if self.args.lambda_dice>0:
+            loss_dice = dice(x_out, t_out, class_weight=self.class_weight)
+            loss_gen = loss_gen + self.args.lambda_dice * loss_dice
+            chainer.report({'loss_dice': loss_dice}, self.dec_y)            
 
         if self.args.lambda_rec_ce>0:
             loss_rec_ce = softmax_focalloss(x_out, t_out, gamma=self.args.focal_gamma, class_weight=self.class_weight)

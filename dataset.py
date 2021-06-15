@@ -18,7 +18,7 @@ except:
 
 
 class Dataset(dataset_mixin.DatasetMixin):
-    def __init__(self, datalist, DataDir, from_col, to_col, clipA=(None,None), clipB=(None,None), class_num=0, crop=(None,None), imgtype='jpg', random_tr=0, random_rot=0, random_scale=0, stack=1, grey=False, BtoA=False, **kwargs):
+    def __init__(self, datalist, DataDir, from_col, to_col, clipA=(None,None), clipB=(None,None), class_num=0, crop=(None,None), imgtype='jpg', random_tr=0, random_rot=0, random_scale=0, stack=1, grey=False, BtoA=False, fn_pattern=None, **kwargs):
         self.dataset = []
         self.clip_A = clipA
         self.clip_B = clipB
@@ -42,6 +42,8 @@ class Dataset(dataset_mixin.DatasetMixin):
                     dirlist.append(f)
             for dirname in dirlist:
                 fnlist = sorted(glob.glob(os.path.join(DataDir,phaseA, dirname, "*.{}".format(imgtype))),key=num)
+                if fn_pattern is not None:
+                    fnlist = [f for f in fnlist if fn_pattern in f]
                 n = len(fnlist)
                 for i in range(n-stack+1):
                     L1, L2 = [], []

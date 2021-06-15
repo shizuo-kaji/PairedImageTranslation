@@ -120,6 +120,7 @@ class PixelShuffler(chainer.Chain):
         h = F.reshape(h, (B, int(C/4), H*2, W*2))
         return self.c(h)
 
+## attention mechanism: (CHW are preserved)
 class NonLocalBlock(chainer.Chain):
     def __init__(self, ch):
         self.ch = ch
@@ -261,6 +262,11 @@ class Encoder(chainer.Chain):
             self.unet = args.unet
         else:
             self.unet = 'none'
+        if hasattr(args,'gen_attention'):
+            self.attention = args.gen_attention
+        else:
+            self.attention = False
+
         self.nfc = args.gen_fc
         if pretrained_model:
             self.base=pretrained_model
@@ -302,6 +308,8 @@ class Encoder(chainer.Chain):
                     setattr(self, 's' + str(i), CBR(self.chs[i], args.skipdim, ksize=3, norm=args.gen_norm, sample='none', equalised=args.eqconv))
             for i in range(self.n_resblock):
                 setattr(self, 'r' + str(i), ResBlock(self.chs[-1], norm=args.gen_norm, activation=args.gen_activation, equalised=args.eqconv, separable=args.spconv))
+            if self.attention:
+                setattr(self, 'a', NonLocalBlock(self.chs[-1]))
             if hasattr(args,'latent_dim') and args.latent_dim>0:
                 self.latent_fc = LBR(args.latent_dim, activation=args.gen_fc_activation)
 
@@ -351,8 +359,10 @@ class Encoder(chainer.Chain):
         ## residual blocks
         for i in range(self.n_resblock):
             e = getattr(self, 'r' + str(i))(e)
+        ## attention block
+        if self.attention:
+            e = self.a(e)
         h.append(e)
-        
         ## post-composed FC layer
         if hasattr(self,'latent_fc'):
             h.append(self.latent_fc(e))
@@ -407,7 +417,7 @@ class Decoder(chainer.Chain):
         for i in range(self.n_resblock):
             e = getattr(self, 'r' + str(i))(e)
         for i in range(1,len(self.chs)+1):
-#            print(e.shape,h[-i-1].shape)
+            #print(e.shape,h[-i-1].shape)
             if self.unet in ['conv','concat']:
                 e = getattr(self, 'ua' + str(i))(F.concat([e,h[-i-1]]))
             elif self.unet=='add':

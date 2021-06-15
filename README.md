@@ -38,14 +38,25 @@ with some improvements.
 ### Requirements
 - a modern GPU
 - python 3: [Anaconda](https://anaconda.org) is recommended
-- chainer >= 6.5.0, cupy, chainerui, chainercv: install them by
+- chainer >= 7.2.0, cupy, chainerui, chainercv, opecv, pydicom: install them by
 ```
-pip install cupy,chainer,chainerui,chainercv
+pip install cupy chainer chainerui chainercv opencv-contrib-python pydicom
+conda install -c conda-forge opencv 
 ```
-- optional: pydicom (to read DICOM files)
-```
-pip install pydicom
-```
+
+Note that with GeForce 30 RTX series, 
+the installation of chainer and cupy can be a little tricky for now.
+You need CUDA >= 11.1 for these GPUs, and it is supported by CuPy >= v8.
+The latest version of Chainer v7.7.0 available on pip is not compatible with the latest version of CuPy.
+See [here](https://github.com/chainer/chainer/pull/8583).
+You can install the latest Chainer directly from the github repository, which is compatible with the latest version of CuPy.
+For example, follow the following procedure:
+- Install CUDA 11.1
+- pip install cupy-cuda111
+- pip install -U git+https://github.com/chainer/chainer.git
+
+You will see some warning messages, but you can ignore them.
+
 
 ## Licence
 MIT Licence

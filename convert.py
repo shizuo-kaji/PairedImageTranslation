@@ -52,7 +52,7 @@ if __name__ == '__main__':
         dataset = Dataset(args.val, args.root, args.from_col, args.from_col, clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, stack=args.stack, grey=args.grey, BtoA=args.btoa)
     else:
         print("Load Dataset from directory: {}".format(args.root))
-        dataset = Dataset('__convert__', args.root, [0], [0], clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, stack=args.stack, grey=args.grey, BtoA=args.btoa)
+        dataset = Dataset('__convert__', args.root, [0], [0], clipA=args.clipA, clipB=args.clipB, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, class_num=args.class_num, stack=args.stack, grey=args.grey, BtoA=args.btoa, fn_pattern=args.fn_pattern)
         
     #iterator = chainer.iterators.MultiprocessIterator(dataset, args.batch_size, n_processes=4, repeat=False, shuffle=False)
     iterator = chainer.iterators.MultithreadIterator(dataset, args.batch_size, n_threads=3, repeat=False, shuffle=False)

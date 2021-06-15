@@ -47,8 +47,8 @@ def main():
         chainer.cuda.get_device(args.gpu).use()
 
     ## dataset preparation
-    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random_tr=args.random_translate, random_rot=args.random_rotation, random_scale=args.random_scale, stack=args.stack, grey=args.grey, BtoA=args.btoa)
-    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, stack=args.stack, grey=args.grey, BtoA=args.btoa)
+    train_d = Dataset(args.train, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, random_tr=args.random_translate, random_rot=args.random_rotation, random_scale=args.random_scale, stack=args.stack, grey=args.grey, BtoA=args.btoa, fn_pattern=args.fn_pattern)
+    test_d = Dataset(args.val, args.root, args.from_col, args.to_col, clipA=args.clipA, clipB=args.clipB, class_num=args.class_num, crop=(args.crop_height,args.crop_width), imgtype=args.imgtype, stack=args.stack, grey=args.grey, BtoA=args.btoa, fn_pattern=args.fn_pattern)
     args.crop_height,args.crop_width = train_d.crop
     if(len(train_d)==0):
         print("No images found!")
@@ -56,8 +56,8 @@ def main():
 
     # setup training/validation data iterators
     train_iter = chainer.iterators.SerialIterator(train_d, args.batch_size)
-    test_iter = chainer.iterators.SerialIterator(test_d, args.nvis, shuffle=False)
-    test_iter_gt = chainer.iterators.SerialIterator(train_d, args.nvis, shuffle=False)   ## same as training data; used for validation
+    test_iter = chainer.iterators.SerialIterator(test_d, args.nvis, shuffle=args.vis_random)
+    test_iter_gt = chainer.iterators.SerialIterator(train_d, args.nvis, shuffle=args.vis_random)   ## same as training data; used for validation
 
     args.ch = len(train_d[0][0])
     args.out_ch = len(train_d[0][1])
@@ -196,6 +196,8 @@ def main():
         log_keys_gen.append('dec_y/loss_L1')
     if args.lambda_rec_l2 > 0:
         log_keys_gen.append('dec_y/loss_L2')
+    if args.lambda_dice > 0:
+        log_keys_gen.append('dec_y/loss_dice')
     if args.lambda_rec_ce > 0:
         log_keys_gen.extend(['dec_y/loss_CE','myval/loss_CE'])
     if args.lambda_reg>0:

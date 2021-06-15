@@ -57,10 +57,14 @@ class VisEvaluator(extensions.Evaluator):
                 x_out = F.softmax(x_out.reshape(x_out.shape[0]*self.args.stack,x_out.shape[1]//self.args.stack,x_out.shape[2],x_out.shape[3]))
                 t_out = t_out.reshape(t_out.shape[0]*self.args.stack,t_out.shape[1]//self.args.stack,t_out.shape[2],t_out.shape[3])
                 #print(x_out.shape, t_out.shape)
+                # select middle slices
+                x_in = x_in[(self.args.stack//2)::self.args.stack]
+                x_out = x_out[(self.args.stack//2)::self.args.stack]
+                t_out = t_out[(self.args.stack//2)::self.args.stack]
 
             if dataset == 'test':  # for test dataset, compute some statistics
-                fig = plt.figure(figsize=(12, 6 * len(batch)*self.args.stack))
-                gs = gridspec.GridSpec(2* len(batch)*self.args.stack, 4, wspace=0.1, hspace=0.1)
+                fig = plt.figure(figsize=(12, 6 * len(x_out)))
+                gs = gridspec.GridSpec(2* len(x_out), 4, wspace=0.1, hspace=0.1)
                 loss_rec_L1 = F.mean_absolute_error(x_out, t_out)
                 loss_rec_L2 = F.mean_squared_error(x_out, t_out)
                 loss_rec_CE = softmax_focalloss(x_out, t_out, gamma=self.args.focal_gamma, class_weight=self.class_weight)
@@ -76,7 +80,7 @@ class VisEvaluator(extensions.Evaluator):
                     imgs = var2unit_img(var) # tanh
 #                print(imgs.shape,np.min(imgs),np.max(imgs))
                 for j in range(len(imgs)):
-                    ax = fig.add_subplot(gs[j+k*len(batch)*self.args.stack,i])
+                    ax = fig.add_subplot(gs[j+k*len(x_out),i])
                     ax.set_title(dataset+"_"+domain[i], fontsize=8)
                     if(imgs[j].shape[2] == 3): ## RGB
                         ax.imshow(imgs[j], interpolation='none',vmin=0,vmax=1)
@@ -105,7 +109,7 @@ class VisEvaluator(extensions.Evaluator):
                 vmax = 0.1
             diff = diff.data.get().transpose(0, 2, 3, 1)
             for j in range(len(diff)):
-                ax = fig.add_subplot(gs[j+k*len(batch)*self.args.stack,3])
+                ax = fig.add_subplot(gs[j+k*len(x_out),3])
                 ax.imshow(diff[j][:,:,0], interpolation='none',cmap='coolwarm',vmin=vmin,vmax=vmax)
                 ax.set_xticks([])
                 ax.set_yticks([])

@@ -11,7 +11,7 @@ default_values = {'out': 'result', 'root': 'data', 'btoa': False, 'train': '__tr
     'learning_rate': None, 'learning_rate_gen': 2e-4, 'learning_rate_dis': 1e-4, 'lr_drop': 1, \
     'weight_decay': 1e-7, 'weight_decay_norm': 'l2', \
     'snapinterval': -1, 'display_interval': 100, 'nvis': 3, 'vis_freq': None, 'parameter_statistics': False, \
-    'lambda_rec_l1': 10, 'lambda_rec_l2': 0, 'lambda_rec_ce': 0, 'lambda_dis': 1, 'lambda_tv': 0, 'lambda_reg': 0, \
+    'lambda_rec_l1': 10, 'lambda_rec_l2': 0, 'lambda_rec_ce': 0, 'lambda_dice': 0, 'lambda_dis': 1, 'lambda_tv': 0, 'lambda_reg': 0, \
     'lambda_mispair': 0, 'lambda_wgan_gp': 10, 'tv_tau': 1e-3, 'loss_ksize': 1, \
     'random_translate': 4, 'random_rotation': 0, 'random_scale': 0, 'noise': 0, 'noise_z': 0, \
     'load_optimizer': False, 'optimizer': 'Adam', \
@@ -20,7 +20,7 @@ default_values = {'out': 'result', 'root': 'data', 'btoa': False, 'train': '__tr
     'dis_basech': 64, 'dis_ndown': 3, 'dis_down': 'down', 'dis_sample': 'down', 'dis_jitter': 0.2, 'dis_dropout': None, \
     'dis_norm': 'batch_aff', 'dis_reg_weighting': 0, 'dis_attention': False, 'dis_warmup': -1, \
     'gen_pretrained_encoder': '', 'gen_pretrained_lr_ratio': 0, 'gen_activation': 'relu', 'gen_out_activation': 'tanh', 'gen_chs': None, \
-    'gen_ndown': 3, 'gen_basech': 64, 'gen_fc': 0, 'gen_fc_activation': 'relu', 'gen_nblock': 9, 'gen_ksize': 3, \
+    'gen_ndown': 3, 'gen_basech': 64, 'gen_fc': 0, 'gen_fc_activation': 'relu', 'gen_nblock': 9, 'gen_ksize': 3, 'gen_attention': False, \
     'gen_sample': 'none-7', 'gen_down': 'down', 'gen_up': 'unpool', 'gen_dropout': None, 'gen_norm': 'batch_aff', \
     'unet': 'conv', 'skipdim': 4, 'latent_dim': -1, \
     'ch': None, 'out_ch': None}
@@ -37,6 +37,7 @@ def arguments():
     parser.add_argument('--val', help='text file containing image pair filenames for validation')
     parser.add_argument('--from_col', '-c1', type=int, nargs="*", help='column index of FromImage')
     parser.add_argument('--to_col', '-c2', type=int, nargs="*", help='column index of ToImage')
+    parser.add_argument('--fn_pattern', '-fn', type=str, help='use files that contains this pattern in the name')
     parser.add_argument('--imgtype', '-it', help="image file type (file extension)")
     parser.add_argument('--crop_width', '-cw', type=int, help='this value may have to be divisible by a large power of two (if you encounter errors)')
     parser.add_argument('--crop_height', '-ch', type=int, help='this value may have to be divisible by a large power of two (if you encounter errors)')
@@ -63,6 +64,7 @@ def arguments():
     parser.add_argument('--display_interval', type=int, help='Interval of displaying log to console')
     parser.add_argument('--nvis', type=int, help='number of images in visualisation after each epoch')
     parser.add_argument('--vis_freq', '-vf', type=int, help='visualisation frequency in iteration')
+    parser.add_argument('--vis_random', '-vr', action='store_true', help='randomise evaluation as well')
     parser.add_argument('--parameter_statistics', '-ps', action='store_true',
                         help='Log NN parameter statistics (very slow)')
 
@@ -70,6 +72,7 @@ def arguments():
     parser.add_argument('--lambda_rec_l1', '-l1', type=float, help='weight for L1 reconstruction loss')
     parser.add_argument('--lambda_rec_l2', '-l2', type=float, help='weight for L2 reconstruction loss')
     parser.add_argument('--lambda_rec_ce', '-lce', type=float, help='weight for softmax focal reconstruction loss')
+    parser.add_argument('--lambda_dice', '-ldice', type=float, help='weight for channel-wise weighted dice loss')
     parser.add_argument('--lambda_dis', '-ldis', type=float, help='weight for adversarial loss')
     parser.add_argument('--lambda_tv', '-ltv', type=float, help='weight for total variation')
     parser.add_argument('--lambda_reg', '-lreg', type=float, help='weight for regularisation for encoders')
@@ -132,6 +135,7 @@ def arguments():
     parser.add_argument('--gen_up', '-gu', help='up layers in generator')
     parser.add_argument('--gen_dropout', '-gdo', type=float, help='dropout ratio for generator')
     parser.add_argument('--gen_norm', '-gn', choices=norm_layer, help='nomalisation layer for generator')
+    parser.add_argument('--gen_attention', action='store_true',help='attention mechanism for generator')
     parser.add_argument('--unet', '-u', help='use u-net for generator')
     parser.add_argument('--skipdim', '-sd', type=int, help='channel number for skip connections')
     parser.add_argument('--latent_dim', type=int, help='dimension of the latent space between encoder and decoder')
