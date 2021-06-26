@@ -140,6 +140,8 @@ if __name__ == '__main__':
             print("Processing {}".format(fn))
             if args.class_num>0:  ## TODO: stacked
                 #write_image((255*np.stack([out[i,2],np.zeros_like(out[i,0]),out[i,1]],axis=0)).astype(np.uint8), os.path.join(outdir,bfn)+".jpg")
+                path = os.path.join(outdir,relfn) ## preserve directory structures
+                np.save(path,out[i])
                 new = np.argmax(out[i],axis=0)
                 airvalue = 0
 #                print(new.shape)
@@ -152,7 +154,7 @@ if __name__ == '__main__':
             # converted image
             if args.imgtype=="dcm":
                 path = os.path.join(outdir,relfn) ## preserve directory structures
-                print(path)
+                #print(path)
                 ref_dicom = dataset.overwrite_dicom(new,fn,salt,airvalue=airvalue)
                 ref_dicom.save_as(path)
             elif args.imgtype=="npy":

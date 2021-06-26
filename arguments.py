@@ -21,7 +21,7 @@ default_values = {'out': 'result', 'root': 'data', 'btoa': False, 'train': '__tr
     'dis_norm': 'batch_aff', 'dis_reg_weighting': 0, 'dis_attention': False, 'dis_warmup': -1, \
     'gen_pretrained_encoder': '', 'gen_pretrained_lr_ratio': 0, 'gen_activation': 'relu', 'gen_out_activation': 'tanh', 'gen_chs': None, \
     'gen_ndown': 3, 'gen_basech': 64, 'gen_fc': 0, 'gen_fc_activation': 'relu', 'gen_nblock': 9, 'gen_ksize': 3, 'gen_attention': False, \
-    'gen_sample': 'none-7', 'gen_down': 'down', 'gen_up': 'unpool', 'gen_dropout': None, 'gen_norm': 'batch_aff', \
+    'gen_sample': 'none-7', 'gen_down': 'down', 'gen_up': 'resize', 'gen_dropout': None, 'gen_norm': 'batch_aff', \
     'unet': 'conv', 'skipdim': 4, 'latent_dim': -1, \
     'ch': None, 'out_ch': None}
 

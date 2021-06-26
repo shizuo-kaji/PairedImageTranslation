@@ -41,7 +41,6 @@ with some improvements.
 - chainer >= 7.2.0, cupy, chainerui, chainercv, opecv, pydicom: install them by
 ```
 pip install cupy chainer chainerui chainercv opencv-contrib-python pydicom
-conda install -c conda-forge opencv 
 ```
 
 Note that with GeForce 30 RTX series, 
