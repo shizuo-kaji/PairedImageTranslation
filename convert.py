@@ -32,8 +32,12 @@ if __name__ == '__main__':
     outdir = os.path.join(args.out, dt.now().strftime('out_%Y%m%d_%H%M'))
 
     if args.gpu >= 0:
-        cuda.get_device_from_id(args.gpu).use()
-        print('use gpu {}'.format(args.gpu))
+        try:
+            cuda.get_device_from_id(args.gpu).use()
+            print('Using GPU {}'.format(args.gpu))
+        except:
+            args.gpu = -1
+            print('No GPU found {}')
 
     # infer model names
     if not args.model_gen:
@@ -43,7 +47,6 @@ if __name__ == '__main__':
             args.model_gen = args.model_gen.replace('enc_x','gen_')
 
     save_args(args, outdir)
-    print(args)
     chainer.config.autotune = True
     chainer.config.dtype = dtypes[args.dtype]
 

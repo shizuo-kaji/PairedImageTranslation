@@ -7,7 +7,7 @@ It can be used for various tasks including
 - denoising, super-resolution, modality-conversion, and reconstruction
 
 The details can be found in our paper:
-"Overview of image-to-image translation using deep neural networks: denoising, super-resolution, modality-conversion, and reconstruction in medical imaging"
+[Overview of image-to-image translation using deep neural networks: denoising, super-resolution, modality-conversion, and reconstruction in medical imaging](https://link.springer.com/article/10.1007/s12194-019-00520-y)
 by Shizuo Kaji and Satoshi Kida, Radiological Physics and Technology,  Volume 12, Issue 3 (2019), pp 235--248,
 [arXiv:1905.08603](https://arxiv.org/abs/1905.08603)
 

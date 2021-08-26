@@ -16,6 +16,8 @@ try:
 except:
     pass
 
+def either(c):
+    return '[%s%s]' % (c.lower(), c.upper()) if c.isalpha() else c
 
 class Dataset(dataset_mixin.DatasetMixin):
     def __init__(self, datalist, DataDir, from_col, to_col, clipA=(None,None), clipB=(None,None), class_num=0, crop=(None,None), imgtype='jpg', random_tr=0, random_rot=0, random_scale=0, stack=1, grey=False, BtoA=False, fn_pattern=None, **kwargs):
@@ -41,7 +43,7 @@ class Dataset(dataset_mixin.DatasetMixin):
                 if os.path.isdir(os.path.join(DataDir,phaseA,f)):
                     dirlist.append(f)
             for dirname in dirlist:
-                fnlist = sorted(glob.glob(os.path.join(DataDir,phaseA, dirname, "*.{}".format(imgtype))),key=num)
+                fnlist = sorted(glob.glob(os.path.join(DataDir,phaseA, dirname, "*.{}".format(''.join(either(c) for c in imgtype)))),key=num)
                 if fn_pattern is not None:
                     fnlist = [f for f in fnlist if fn_pattern in f]
                 n = len(fnlist)
@@ -103,6 +105,7 @@ class Dataset(dataset_mixin.DatasetMixin):
         imgs_in =[]
         for fn in fns:
             fn1,ext = os.path.splitext(fn)
+            ext = ext.lower()
             # image can be given as csv or jpg/png... etc
             if ext==".csv":
                 img_in = np.loadtxt(fn, delimiter=",")
@@ -202,7 +205,7 @@ class Dataset(dataset_mixin.DatasetMixin):
         img = img.astype(dt)           
 #        print("min {}, max {}, intercept {}\n".format(np.min(img),np.max(img),ref_dicom.RescaleIntercept))
 #            print(img.shape, img.dtype)
-        ref_dicom.PixelData = img.tostring()
+        ref_dicom.PixelData = img.tobytes()
         ## UID should be changed for dcm's under different dir
         #                uid=dicom.UID.generate_uid()
         #                uid = dicom.UID.UID(uid.name[:-len(args.suffix)]+args.suffix)
